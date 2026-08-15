@@ -1,0 +1,46 @@
+TA PROPRE MUSIQUE
+=================
+
+Dépose tes fichiers ici. Le jeu les détecte au démarrage, sans rien
+modifier dans le code.
+
+Noms de fichiers reconnus
+-------------------------
+  menu       écrans de menu et de résultats
+  course     roulage normal
+  tension    pente supérieure à 5 %, ou rival dangereux à moins de 60 m
+  finale     dernier kilomètre
+  victoire   première place à l'arrivée
+
+Extensions acceptées : .mp3, .ogg, .m4a, .wav
+Exemple : public/audio/course.mp3
+
+Tu peux n'en fournir qu'un ou deux. Chaque ambiance sans fichier garde la
+musique générée par le jeu. L'onglet Paramètres montre, pour chacune des
+cinq, si elle vient de ton fichier ou du générateur.
+
+Conseils
+--------
+  - Les morceaux tournent en boucle : choisis-les sans intro longue ni fin
+    marquée, sinon la reprise s'entend.
+  - Le passage d'une ambiance à l'autre se fait en fondu enchaîné de 1,6 s.
+    Des morceaux de tempos proches s'enchaînent mieux.
+  - Préfère le MP3 autour de 128 kbit/s : au-delà, le gain est inaudible en
+    jeu et le poids ralentit le chargement, en particulier sur console.
+  - Le volume se règle dans Paramètres, il s'applique aussi à tes fichiers.
+
+Un mot sur les droits
+---------------------
+Pour jouer chez toi, mets ce que tu veux.
+
+En revanche, si tu déploies le jeu sur une adresse publique (Netlify), de la
+musique commerciale te ferait diffuser une œuvre protégée sans autorisation.
+Pour un site public, prends de la musique libre de droits :
+
+  Free Music Archive   https://freemusicarchive.org  (filtre CC0 ou CC-BY)
+  Incompetech          https://incompetech.com       (Kevin MacLeod, CC-BY)
+  Pixabay Music        https://pixabay.com/music/    (usage libre)
+  OpenGameArt          https://opengameart.org/art-search?field_art_type_tid%5B%5D=12
+
+Cherche du côté "electronic", "driving", "sport" pour la course, et
+"tension" ou "suspense" pour les cols.

@@ -1,0 +1,20 @@
+CIELS
+=====
+
+sky-clear.jpg     étapes de plaine et contre-la-montre
+sky-warm.jpg      étapes vallonnées
+sky-mountain.jpg  étapes de montagne
+
+Photos panoramiques équirectangulaires, licence CC0 (Poly Haven),
+aucune attribution requise, usage commercial autorisé.
+
+Sources :
+  sky-clear     Kloofendal 48d Partly Cloudy (Pure Sky)
+  sky-warm      Autumn Field (Pure Sky)
+  sky-mountain  Drackenstein Quarry (Pure Sky)
+  https://polyhaven.com/hdris/skies
+
+Pour en changer : prends n'importe quel HDRI de la catégorie "skies" sur
+polyhaven.com, de préférence une variante "Pure Sky" (ciel seul, sans sol),
+convertis-la en JPEG équirectangulaire 2048x1024 et remplace le fichier en
+gardant le même nom. Aucune modification de code nécessaire.

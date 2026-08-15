@@ -1,0 +1,50 @@
+DÉCOR 3D OPTIONNEL
+==================
+
+Dépose ici des fichiers GLB pour remplacer le décor procédural.
+Le jeu fonctionne sans : chaque fichier absent garde sa version générée.
+
+Noms de fichiers reconnus
+-------------------------
+  tree-pine.glb        conifère        (étapes de montagne)
+  tree-broadleaf.glb   feuillu         (plaine et vallonné)
+  rock.glb             rocher
+  barrier.glb          barrière (~2 m de long)
+  spectator.glb        spectateur debout
+
+Où les trouver (tout en CC0, aucune attribution requise)
+--------------------------------------------------------
+  Arbres, rochers   Kenney Nature Kit — 330 modèles
+                    https://kenney.nl/assets/nature-kit
+                    KayKit Forest — 100+ modèles au format glTF
+                    https://kaylousberg.itch.io/kaykit-forest
+                    Quaternius Stylized Nature MegaKit — 116 modèles
+                    https://quaternius.itch.io/stylized-nature-megakit
+
+  Barrières         Kenney Racing Kit — 110 modèles
+                    https://kenney.nl/assets/racing-kit
+
+  Spectateurs       Kenney Modular Characters — 425 modèles
+                    https://kenney.nl/assets/modular-characters
+                    Quaternius Universal Base Characters
+                    https://quaternius.com/packs/universalbasecharacters.html
+
+Ces packs sont livrés en .glb ou .gltf. Prends un modèle, renomme-le selon
+la liste ci-dessus, dépose-le ici. Rien d'autre à faire.
+
+Ce qui est corrigé automatiquement
+----------------------------------
+  - l'échelle (un modèle en centimètres est ramené en mètres)
+  - le centrage horizontal
+  - la position au sol (l'origine est replacée sous le modèle)
+
+Ce qui n'est pas géré
+---------------------
+  Les textures sont perdues : seule la couleur de chaque matériau est
+  conservée, transférée dans les couleurs de sommets. C'est le prix de
+  l'instanciation, qui permet d'afficher plusieurs milliers d'éléments en
+  un seul appel de rendu. Les packs cités ci-dessus utilisent justement des
+  matériaux de couleur unie, donc le rendu reste fidèle.
+
+  Les montagnes ne se remplacent pas par un GLB : le relief est calculé pour
+  épouser le tracé de la route, qui change à chaque étape.

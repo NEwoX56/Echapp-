@@ -1,0 +1,69 @@
+LES DEUX ZIPS, EXPLIQUÉS
+========================
+
+echappee-projet        le code source. C'est là qu'on modifie des choses.
+echappee-dist-netlify  le jeu compilé, prêt à mettre en ligne.
+
+Le second est FABRIQUÉ à partir du premier. Ce ne sont pas deux versions
+différentes : c'est la même chose, avant et après compilation.
+
+    echappee-projet  --- npm run build --->  dossier dist  ---> Netlify
+
+Donc si tu modifies le projet, il faut refabriquer le dist. Sinon tu mets
+en ligne l'ancienne version.
+
+
+AJOUTER TA MUSIQUE : LA MÉTHODE SIMPLE
+======================================
+
+Pour de la musique, tu n'as PAS besoin de compiler.
+
+  1. Décompresse echappee-dist-netlify
+  2. Ouvre le dossier dist, puis le dossier audio
+  3. Dépose tes fichiers dedans : course.mp3, tension.mp3, etc.
+  4. Glisse le dossier dist sur https://app.netlify.com/drop
+
+C'est tout. Le jeu détecte les fichiers au démarrage.
+
+Même chose pour les autres contenus :
+  dist/audio/      ta musique
+  dist/textures/   les ciels (sky-clear.jpg, sky-warm.jpg, sky-mountain.jpg)
+  dist/models/     rider.glb, et scenery/ pour les arbres et spectateurs
+
+Ces dossiers sont recopiés tels quels à la compilation : y déposer un
+fichier revient au même que de le mettre dans public/ du projet.
+
+
+MODIFIER LE JEU LUI-MÊME : LA MÉTHODE COMPLÈTE
+==============================================
+
+Nécessaire seulement pour changer le code : noms des coureurs, statistiques,
+étapes, équilibrage.
+
+  1. Décompresse echappee-projet
+  2. Ouvre un terminal dans le dossier
+  3. npm install          (une seule fois, la première)
+  4. Modifie ce que tu veux
+     - src/data/roster.ts     les coureurs et leurs noms
+     - src/data/tours.ts      les tours et les étapes
+     - src/career/Career.ts   ton équipe
+  5. npm run build
+  6. Un dossier dist apparaît dans le projet : c'est ta nouvelle version
+  7. Glisse ce dossier dist sur https://app.netlify.com/drop
+
+Pour tester avant de mettre en ligne : npm run dev, puis ouvre l'adresse
+affichée (http://localhost:5173).
+
+
+ATTENTION
+=========
+
+Ne modifie jamais le dossier dist en espérant changer le code : il contient
+du JavaScript compilé, illisible et réécrit à chaque build. Les fichiers que
+tu y déposes (musique, images, modèles) sont en revanche parfaitement
+valables, ce sont des ressources et non du code.
+
+Et si tu recompiles, pense à redéposer ta musique dans le nouveau dist —
+sauf si tu l'as aussi mise dans public/audio/ du projet, auquel cas elle est
+recopiée automatiquement à chaque build. C'est la meilleure méthode si tu
+comptes recompiler souvent.

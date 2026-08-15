@@ -1,0 +1,27 @@
+IMAGE DE FOND DU MENU
+=====================
+
+col-montagne.jpg est l'image affichée derrière le menu principal. La couleur
+d'accent de toute l'interface — titres, boutons, liserés — en est extraite
+automatiquement au chargement.
+
+POUR CHANGER D'IMAGE
+--------------------
+Remplace simplement col-montagne.jpg par la tienne, en gardant le même nom.
+Format conseillé : paysage, environ 1720 x 968 pixels, sujet plutôt à droite
+(la gauche est assombrie pour accueillir le texte), moins de 300 Ko.
+
+Rien d'autre à faire : la teinte s'ajustera d'elle-même.
+
+POUR EN METTRE PLUSIEURS
+------------------------
+Le système sait faire défiler plusieurs images avec un fondu. Ajoute-les dans
+ce dossier puis déclare-les dans src/ui/Menu.ts, méthode monterHero.
+
+UN MOT SUR LES DROITS
+---------------------
+Pour un usage chez toi, mets ce que tu veux.
+
+Sur une adresse publique en revanche, attention aux photos montrant des
+maillots d'équipes, des logos de sponsors ou des personnes reconnaissables :
+ce sont des marques déposées et des droits à l'image.

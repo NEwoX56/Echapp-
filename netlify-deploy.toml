@@ -1,0 +1,9 @@
+# Accompagne le dossier déposé sur Netlify.
+#
+# Ce fichier ne contient volontairement aucune section de compilation : sur un dépôt
+# manuel, indiquer une commande ou un répertoire de publication conduirait
+# Netlify à tenter une compilation, qui échoue et laisse le site vide.
+# On se contente d'indiquer où se trouvent les fonctions déjà empaquetées.
+
+[functions]
+  directory = "netlify/functions"

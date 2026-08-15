@@ -1,0 +1,12 @@
+# Configuration Netlify.
+#
+# Ce fichier accompagne le dossier déposé sur Netlify. Il indique où trouver
+# la fonction de synchronisation, sans quoi le dépôt manuel ne la publierait
+# pas et le jeu retomberait simplement sur la sauvegarde par fichier.
+
+[build]
+  publish = "."
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"

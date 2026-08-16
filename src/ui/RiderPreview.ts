@@ -67,6 +67,7 @@ export class RiderPreview {
       this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
       this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
     }
+    this.applyEnvironment();
     this.resize();
     this.setAppearance(appearance);
 
@@ -77,6 +78,60 @@ export class RiderPreview {
     this.last = performance.now();
     cancelAnimationFrame(this.raf);
     this.loop(this.last);
+  }
+
+  /**
+   * Environnement de réflexion, procédural comme le reste du jeu : sans lui,
+   * les lunettes et le métal du vélo (verre, chrome — voir RiderModel) restent
+   * plats quelle que soit leur métalness, faute de quoi refléter. Un simple
+   * dégradé de ciel dans une carte PMREM suffit à leur donner un reflet net,
+   * sans dépendre des photos utilisées en course (non chargées dans l'atelier).
+   */
+  private applyEnvironment(): void {
+    if (!this.renderer) return;
+    try {
+      const c = document.createElement('canvas');
+      c.width = 8;
+      c.height = 64;
+      const g = c.getContext('2d')!;
+      const grad = g.createLinearGradient(0, 0, 0, 64);
+      grad.addColorStop(0, '#bcd6ef');
+      grad.addColorStop(0.45, '#e3edf7');
+      grad.addColorStop(0.56, '#f4ecd9');
+      grad.addColorStop(1, '#8d9078');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 8, 64);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+
+      const envScene = new THREE.Scene();
+      const dome = new THREE.Mesh(
+        new THREE.SphereGeometry(6, 16, 12),
+        new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide })
+      );
+      envScene.add(dome);
+      // point lumineux franc : sans lui le reflet reste une tache diffuse
+      const soleil = new THREE.Mesh(
+        new THREE.SphereGeometry(0.6, 12, 8),
+        new THREE.MeshBasicMaterial({ color: 0xfff6df })
+      );
+      soleil.position.set(3, 4, 2.5);
+      envScene.add(soleil);
+
+      const pmrem = new THREE.PMREMGenerator(this.renderer);
+      const target = pmrem.fromScene(envScene, 0.03);
+      this.scene.environment = target.texture;
+      this.scene.environmentIntensity = 0.8;
+      pmrem.dispose();
+      tex.dispose();
+      dome.geometry.dispose();
+      (dome.material as THREE.Material).dispose();
+      soleil.geometry.dispose();
+      (soleil.material as THREE.Material).dispose();
+    } catch {
+      // cible de rendu flottante indisponible sur cette plateforme : les
+      // matériaux gardent leur teinte plate, sans reflet — pas d'écran blanc
+    }
   }
 
   private onDown = (e: PointerEvent): void => {

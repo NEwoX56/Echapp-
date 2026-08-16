@@ -263,13 +263,34 @@ export class Decor {
 
   /* ---------------- agglomérations ---------------- */
 
+  /*
+   * Plusieurs teintes de façade par palier : verre bleuté, pierre claire,
+   * grès chaud, béton. Un seul ton partagé par toute la ville donnait un
+   * alignement de clones — chaque bâtiment tire désormais l'une de ces
+   * variantes, avec sa propre texture (fenêtres allumées différentes).
+   */
+  private static readonly TEINTES_HAUTS = ['#6d707a', '#8a95a3', '#8c7a68', '#767a72'];
+  private static readonly TEINTES_MOYENS = ['#8a8073', '#a99378', '#8c9088', '#96877a'];
+  private static readonly TEINTES_TOIT = [0x8c4a35, 0x5a5f68, 0x6b3d34];
+
   private batir(z: Zone, rand: () => number, urbain: boolean): void {
     const d = this.q.densiteDecor;
     const pas = (urbain ? 13 : 22) / Math.max(0.3, d);
-    const hauts: Placement[] = [];
-    const moyens: Placement[] = [];
+    const nHauts = Decor.TEINTES_HAUTS.length;
+    const nMoyens = Decor.TEINTES_MOYENS.length;
+    const hauts: Placement[][] = Array.from({ length: nHauts }, () => []);
+    const moyens: Placement[][] = Array.from({ length: nMoyens }, () => []);
     const maisons: Placement[] = [];
-    const toits: Placement[] = [];
+    const toits: Placement[][] = Decor.TEINTES_TOIT.map(() => []);
+    // couronnement des tours : muret en retrait, et parfois citerne ou antenne
+    const casquettes: Placement[] = [];
+    const citernes: Placement[] = [];
+    const antennes: Placement[] = [];
+    // rez-de-chaussée commerçant des immeubles moyens : sans lui, le mur de
+    // façade descendait tel quel jusqu'au trottoir
+    const socles: Placement[] = [];
+    const COULEURS_MARQUISE = [0xb23b32, 0x2f6b4f, 0x2c4f7a, 0xc79a3b];
+    const marquises: Placement[][] = COULEURS_MARQUISE.map(() => []);
 
     for (let x = z.from; x < z.to; x += pas) {
       for (const side of [-1, 1]) {
@@ -281,16 +302,60 @@ export class Decor {
 
         if (urbain && rand() < 0.42) {
           const h = 14 + rand() * 22;
-          hauts.push({ dist, lat, y, rotY, scale: new THREE.Vector3(6 + rand() * 4, h, 6 + rand() * 4) });
+          const scale = new THREE.Vector3(6 + rand() * 4, h, 6 + rand() * 4);
+          hauts[Math.floor(rand() * nHauts)].push({ dist, lat, y, rotY, scale });
+          casquettes.push({
+            dist,
+            lat,
+            y: y + h,
+            rotY,
+            scale: new THREE.Vector3(scale.x * 0.88, 0.9, scale.z * 0.88)
+          });
+          const toit = rand();
+          if (toit < 0.28) {
+            citernes.push({
+              dist: dist + (rand() - 0.5) * scale.x * 0.4,
+              lat: lat + (rand() - 0.5) * scale.z * 0.4,
+              y: y + h + 0.9,
+              rotY,
+              scale: new THREE.Vector3(1.1, 1.5 + rand(), 1.1)
+            });
+          } else if (toit < 0.55) {
+            antennes.push({ dist, lat, y: y + h + 0.9, rotY, scale: new THREE.Vector3(1, 3 + rand() * 2.5, 1) });
+          }
         } else if (urbain || rand() < 0.35) {
           const h = 7 + rand() * 6;
-          moyens.push({ dist, lat, y, rotY, scale: new THREE.Vector3(6 + rand() * 3, h, 6 + rand() * 3) });
+          const scale = new THREE.Vector3(6 + rand() * 3, h, 6 + rand() * 3);
+          moyens[Math.floor(rand() * nMoyens)].push({ dist, lat, y, rotY, scale });
+          if (urbain) {
+            const hSocle = 2.4 + rand() * 0.5;
+            socles.push({
+              dist,
+              lat,
+              y,
+              rotY,
+              scale: new THREE.Vector3(scale.x * 1.04, hSocle, scale.z * 1.04)
+            });
+            marquises[Math.floor(rand() * COULEURS_MARQUISE.length)].push({
+              dist,
+              lat,
+              y: y + hSocle,
+              rotY,
+              scale: new THREE.Vector3(scale.x * 1.1, 0.16, scale.z * 1.1)
+            });
+          }
         } else {
           const h = 4 + rand() * 2;
           const s = new THREE.Vector3(5 + rand() * 2, h, 5 + rand() * 2);
           maisons.push({ dist, lat, y, rotY, scale: s });
-          // toit à deux pentes posé au sommet des murs
-          toits.push({ dist, lat, y: y + h, rotY, scale: new THREE.Vector3(s.x * 0.78, 2.4 + rand(), s.z * 0.78) });
+          // toit à deux pentes (pignon) posé au sommet des murs, avec léger débord
+          toits[Math.floor(rand() * Decor.TEINTES_TOIT.length)].push({
+            dist,
+            lat,
+            y: y + h,
+            rotY,
+            scale: new THREE.Vector3(s.x * 1.1, 2.1 + rand() * 1.1, s.z * 1.16)
+          });
         }
       }
     }
@@ -302,15 +367,64 @@ export class Decor {
       this.jetables.push(t);
       return new THREE.MeshStandardMaterial({ map: t, roughness: 0.92 });
     };
-    this.ajouter('imm-haut', cube, facade('#6d707a', true, 2, 4), hauts, true);
-    this.ajouter('imm-moyen', cube, facade('#8a8073', true, 2, 2.4), moyens, true);
+    // prisme à section triangulaire (3 segments radiaux), couché sur le côté :
+    // la faîtière court selon x, les deux pans descendent vers ±z
+    const gable = () => {
+      const r = 0.62;
+      return new THREE.CylinderGeometry(r, r, 1, 3).rotateZ(Math.PI / 2).translate(0, r / 2, 0);
+    };
+
+    Decor.TEINTES_HAUTS.forEach((teinte, i) =>
+      this.ajouter(`imm-haut-${i}`, cube, facade(teinte, true, 2, 4), hauts[i], true)
+    );
+    Decor.TEINTES_MOYENS.forEach((teinte, i) =>
+      this.ajouter(`imm-moyen-${i}`, cube, facade(teinte, true, 2, 2.4), moyens[i], true)
+    );
     this.ajouter('maison', cube, facade('#c9bda8', false, 1.6, 1.2), maisons, true);
+    Decor.TEINTES_TOIT.forEach((couleur, i) =>
+      this.ajouter(
+        `toit-${i}`,
+        gable,
+        () => new THREE.MeshStandardMaterial({ color: couleur, roughness: 1, flatShading: true }),
+        toits[i],
+        true
+      )
+    );
     this.ajouter(
-      'toit',
-      () => new THREE.ConeGeometry(0.78, 1, 4).rotateY(Math.PI / 4).translate(0, 0.5, 0),
-      () => new THREE.MeshStandardMaterial({ color: 0x8c4a35, roughness: 1, flatShading: true }),
-      toits,
+      'casquette',
+      cube,
+      () => new THREE.MeshStandardMaterial({ color: 0x2c2f36, roughness: 0.85 }),
+      casquettes,
       true
+    );
+    this.ajouter(
+      'citerne',
+      () => new THREE.CylinderGeometry(0.5, 0.5, 1, 8).translate(0, 0.5, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x4a4e58, roughness: 0.7, metalness: 0.3 }),
+      citernes,
+      true
+    );
+    this.ajouter(
+      'antenne',
+      () => new THREE.CylinderGeometry(0.06, 0.09, 1, 5).translate(0, 0.5, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x22252a, roughness: 0.6, metalness: 0.4 }),
+      antennes
+    );
+    // vitrine sombre en rez-de-chaussée, légèrement en saillie sur la façade
+    this.ajouter(
+      'socle',
+      cube,
+      () => new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.22, metalness: 0.2 }),
+      socles,
+      true
+    );
+    COULEURS_MARQUISE.forEach((couleur, i) =>
+      this.ajouter(
+        `marquise-${i}`,
+        cube,
+        () => new THREE.MeshStandardMaterial({ color: couleur, roughness: 0.8 }),
+        marquises[i]
+      )
     );
   }
 

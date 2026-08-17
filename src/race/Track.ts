@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { StageDef, ClimbDef, SprintDef } from '../data/types';
 import type { SceneryAssets } from '../core/SceneryAssets';
+import type { BuildingKit } from './BuildingKit';
 import type { QualitySettings } from '../core/Quality';
 import { Decor } from './Decor';
 
@@ -71,7 +72,12 @@ export class Track {
     if (this.horlogeFoule) this.horlogeFoule.value += dt;
   }
 
-  constructor(stage: StageDef, scenery: SceneryAssets | null = null, quality?: QualitySettings) {
+  constructor(
+    stage: StageDef,
+    scenery: SceneryAssets | null = null,
+    quality?: QualitySettings,
+    buildings: BuildingKit | null = null
+  ) {
     this.stage = stage;
     this.scenery = scenery;
     this.q =
@@ -115,7 +121,7 @@ export class Track {
     this.decor = new Decor(this, stage, {
       densiteDecor: this.q.densiteDecor ?? 1,
       shadows: this.q.shadows !== false
-    }, rand);
+    }, rand, buildings);
     this.group.add(this.decor.group);
 
     this.buildScenery(rand);

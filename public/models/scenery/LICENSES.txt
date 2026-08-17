@@ -5,6 +5,10 @@ tree-pine.glb        Kenney Nature Kit (2.1) — tree_pineTallA_detailed.glb
 tree-broadleaf.glb   Kenney Nature Kit (2.1) — tree_oak.glb
 rock.glb             Kenney Nature Kit (2.1) — rock_largeA.glb
 barrier.glb          Kenney Racing Kit (2.0) — barrierWhite.glb
+building-wall-a.glb  Kenney Modular Buildings — modularBuildings_021.gltf
+building-wall-b.glb  Kenney Modular Buildings — modularBuildings_046.gltf
+building-ground.glb  Kenney Modular Buildings — modularBuildings_053.gltf
+building-roof.glb    Kenney Modular Buildings — modularBuildings_004.gltf
 
 Source : https://kenney.nl (Kenney)
 Licence : CC0 1.0 Universal (domaine public)

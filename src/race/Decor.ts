@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { StageDef, StageType } from '../data/types';
+import type { BuildingKit } from './BuildingKit';
 
 /**
  * Paysages traversés.
@@ -145,16 +146,26 @@ interface Placement {
 export class Decor {
   readonly group = new THREE.Group();
   private jetables: (THREE.Material | THREE.BufferGeometry | THREE.Texture)[] = [];
+  /** meshes utilisant une géométrie/matériau partagé (BuildingKit) : à ne pas disposer ici */
+  private meshesPartages = new Set<THREE.InstancedMesh>();
   private piste: PisteDecor;
   private q: ReglagesDecor;
   readonly zones: Zone[];
 
   private tmp = new THREE.Vector3();
   private tan = new THREE.Vector3();
+  private buildings: BuildingKit | null;
 
-  constructor(piste: PisteDecor, stage: StageDef, q: ReglagesDecor, rand: () => number) {
+  constructor(
+    piste: PisteDecor,
+    stage: StageDef,
+    q: ReglagesDecor,
+    rand: () => number,
+    buildings: BuildingKit | null = null
+  ) {
     this.piste = piste;
     this.q = q;
+    this.buildings = buildings?.available ? buildings : null;
     this.zones = decouperZones(stage, rand);
 
     for (const z of this.zones) {
@@ -205,7 +216,13 @@ export class Decor {
    */
   private lots = new Map<
     string,
-    { geo: () => THREE.BufferGeometry; mat: () => THREE.Material; places: Placement[]; ombre: boolean }
+    {
+      geo: () => THREE.BufferGeometry;
+      mat: () => THREE.Material;
+      places: Placement[];
+      ombre: boolean;
+      partage: boolean;
+    }
   >();
 
   private ajouter(
@@ -213,28 +230,37 @@ export class Decor {
     geo: () => THREE.BufferGeometry,
     mat: () => THREE.Material,
     places: Placement[],
-    ombre = false
+    ombre = false,
+    partage = false
   ): void {
     if (!places.length) return;
     const lot = this.lots.get(cle);
     if (lot) lot.places.push(...places);
-    else this.lots.set(cle, { geo, mat, places: [...places], ombre });
+    else this.lots.set(cle, { geo, mat, places: [...places], ombre, partage });
   }
 
   /** construit un lot d'instances par type d'objet accumulé */
   private finaliser(): void {
     for (const lot of this.lots.values()) {
-      this.instancier(lot.geo(), lot.mat(), lot.places, lot.ombre);
+      this.instancier(lot.geo(), lot.mat(), lot.places, lot.ombre, lot.partage);
     }
     this.lots.clear();
   }
 
-  /** pose une série d'instances à partir d'une géométrie unique */
+  /**
+   * Pose une série d'instances à partir d'une géométrie unique.
+   *
+   * `partage` marque une géométrie/matériau qui n'appartient pas à ce
+   * Decor — typiquement une pièce de BuildingKit, chargée une fois pour
+   * toute la session et réutilisée d'étape en étape. La disposer à la fin
+   * de celle-ci casserait le rendu des étapes suivantes.
+   */
   private instancier(
     geo: THREE.BufferGeometry,
     mat: THREE.Material,
     places: Placement[],
-    ombre = false
+    ombre = false,
+    partage = false
   ): void {
     if (!places.length) return;
     const mesh = new THREE.InstancedMesh(geo, mat, places.length);
@@ -252,13 +278,40 @@ export class Decor {
     mesh.castShadow = ombre && this.q.shadows && this.q.densiteDecor >= 1;
     mesh.receiveShadow = false;
     this.group.add(mesh);
-    this.jetables.push(geo, mat);
+    if (partage) this.meshesPartages.add(mesh);
+    else this.jetables.push(geo, mat);
   }
 
   /** orientation d'un objet aligné sur la route */
   private capAt(dist: number): number {
     this.piste.pose(dist, 0, this.tmp, this.tan);
     return Math.atan2(this.tan.x, this.tan.z);
+  }
+
+  /** citerne ou antenne posée au hasard sur un toit de tour, GLB ou procédural */
+  private toitureExtra(
+    rand: () => number,
+    dist: number,
+    lat: number,
+    yToit: number,
+    rotY: number,
+    largeur: number,
+    profondeur: number,
+    citernes: Placement[],
+    antennes: Placement[]
+  ): void {
+    const toit = rand();
+    if (toit < 0.28) {
+      citernes.push({
+        dist: dist + (rand() - 0.5) * largeur * 0.4,
+        lat: lat + (rand() - 0.5) * profondeur * 0.4,
+        y: yToit + 0.9,
+        rotY,
+        scale: new THREE.Vector3(1.1, 1.5 + rand(), 1.1)
+      });
+    } else if (toit < 0.55) {
+      antennes.push({ dist, lat, y: yToit + 0.9, rotY, scale: new THREE.Vector3(1, 3 + rand() * 2.5, 1) });
+    }
   }
 
   /* ---------------- agglomérations ---------------- */
@@ -272,6 +325,14 @@ export class Decor {
   private static readonly TEINTES_HAUTS = ['#6d707a', '#8a95a3', '#8c7a68', '#767a72'];
   private static readonly TEINTES_MOYENS = ['#8a8073', '#a99378', '#8c9088', '#96877a'];
   private static readonly TEINTES_TOIT = [0x8c4a35, 0x5a5f68, 0x6b3d34];
+  /*
+   * La face habitée (fenêtres/porte) de chaque pièce du kit modulaire
+   * regarde vers -X dans le fichier source. Un immeuble assemblé est
+   * toujours en bord de route, avec la route sur l'un ou l'autre côté selon
+   * `side` : cette constante aligne -X vers la route pour side<0, et
+   * BUILDING_FACE_OFFSET + PI fait l'inverse pour side>0.
+   */
+  private static readonly BUILDING_FACE_OFFSET = 0;
 
   private batir(z: Zone, rand: () => number, urbain: boolean): void {
     const d = this.q.densiteDecor;
@@ -291,6 +352,12 @@ export class Decor {
     const socles: Placement[] = [];
     const COULEURS_MARQUISE = [0xb23b32, 0x2f6b4f, 0x2c4f7a, 0xc79a3b];
     const marquises: Placement[][] = COULEURS_MARQUISE.map(() => []);
+    // tours assemblées à partir de vrais modèles 3D (BuildingKit), quand
+    // disponibles : un lot par pièce (étages, rez-de-chaussée, toit), rempli
+    // seulement si this.buildings est chargé
+    const glbWalls: Placement[][] = this.buildings ? this.buildings.walls.map(() => []) : [];
+    const glbGround: Placement[] = [];
+    const glbRoof: Placement[] = [];
 
     for (let x = z.from; x < z.to; x += pas) {
       for (const side of [-1, 1]) {
@@ -300,7 +367,28 @@ export class Decor {
         const y = this.piste.groundAt(dist, lat);
         const rotY = this.capAt(dist) + (rand() - 0.5) * 0.5;
 
-        if (urbain && rand() < 0.42) {
+        const tourIci = urbain && rand() < 0.42;
+        if (tourIci && this.buildings) {
+          // tour assemblée à partir de vrais modèles 3D : étages empilés,
+          // rez-de-chaussée à l'entrée, toit plat en couronnement
+          const bk = this.buildings;
+          const echelle = 6 + rand() * 4;
+          const storyH = bk.walls[0].height * echelle;
+          const floors = Math.max(3, Math.round((14 + rand() * 22) / storyH));
+          const h = floors * storyH;
+          const bScale = new THREE.Vector3(echelle, echelle, echelle);
+          const faceRot = rotY + (side > 0 ? Decor.BUILDING_FACE_OFFSET + Math.PI : Decor.BUILDING_FACE_OFFSET);
+          for (let f = 0; f < floors; f++) {
+            if (f === 0 && bk.ground) {
+              glbGround.push({ dist, lat, y, rotY: faceRot, scale: bScale });
+            } else {
+              const wi = Math.floor(rand() * bk.walls.length);
+              glbWalls[wi].push({ dist, lat, y: y + f * storyH, rotY: faceRot, scale: bScale });
+            }
+          }
+          if (bk.roof) glbRoof.push({ dist, lat, y: y + h, rotY: faceRot, scale: bScale });
+          this.toitureExtra(rand, dist, lat, y + h, rotY, bScale.x, bScale.z, citernes, antennes);
+        } else if (tourIci) {
           const h = 14 + rand() * 22;
           const scale = new THREE.Vector3(6 + rand() * 4, h, 6 + rand() * 4);
           hauts[Math.floor(rand() * nHauts)].push({ dist, lat, y, rotY, scale });
@@ -311,18 +399,7 @@ export class Decor {
             rotY,
             scale: new THREE.Vector3(scale.x * 0.88, 0.9, scale.z * 0.88)
           });
-          const toit = rand();
-          if (toit < 0.28) {
-            citernes.push({
-              dist: dist + (rand() - 0.5) * scale.x * 0.4,
-              lat: lat + (rand() - 0.5) * scale.z * 0.4,
-              y: y + h + 0.9,
-              rotY,
-              scale: new THREE.Vector3(1.1, 1.5 + rand(), 1.1)
-            });
-          } else if (toit < 0.55) {
-            antennes.push({ dist, lat, y: y + h + 0.9, rotY, scale: new THREE.Vector3(1, 3 + rand() * 2.5, 1) });
-          }
+          this.toitureExtra(rand, dist, lat, y + h, rotY, scale.x, scale.z, citernes, antennes);
         } else if (urbain || rand() < 0.35) {
           const h = 7 + rand() * 6;
           const scale = new THREE.Vector3(6 + rand() * 3, h, 6 + rand() * 3);
@@ -397,6 +474,20 @@ export class Decor {
       casquettes,
       true
     );
+    if (this.buildings) {
+      const bk = this.buildings;
+      bk.walls.forEach((piece, i) =>
+        this.ajouter(`glb-mur-${i}`, () => piece.geometry, () => piece.material, glbWalls[i], true, true)
+      );
+      if (bk.ground) {
+        const ground = bk.ground;
+        this.ajouter('glb-rdc', () => ground.geometry, () => ground.material, glbGround, true, true);
+      }
+      if (bk.roof) {
+        const roof = bk.roof;
+        this.ajouter('glb-toit', () => roof.geometry, () => roof.material, glbRoof, true, true);
+      }
+    }
     this.ajouter(
       'citerne',
       () => new THREE.CylinderGeometry(0.5, 0.5, 1, 8).translate(0, 0.5, 0),
@@ -1124,8 +1215,9 @@ export class Decor {
   dispose(): void {
     this.group.traverse((o) => {
       const m = o as THREE.Mesh;
-      if (m.isMesh) m.geometry?.dispose();
+      if (m.isMesh && !this.meshesPartages.has(m as THREE.InstancedMesh)) m.geometry?.dispose();
     });
     for (const j of this.jetables) j.dispose();
+    this.meshesPartages.clear();
   }
 }

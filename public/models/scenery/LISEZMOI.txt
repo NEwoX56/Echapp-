@@ -12,6 +12,16 @@ Noms de fichiers reconnus
   barrier.glb          barrière (~2 m de long)
   spectator.glb        spectateur debout
 
+  building-wall-a.glb   étage de tour, une façade avec fenêtres
+  building-wall-b.glb   étage de tour, une façade avec baie vitrée
+  building-ground.glb   rez-de-chaussée avec entrée
+  building-roof.glb     toit plat de couronnement
+
+  Ces quatre-là sont gérés par BuildingKit.ts (pas SceneryAssets.ts) : les
+  tours du décor urbain les empilent (rez-de-chaussée, étages, toit) au lieu
+  d'utiliser un simple bloc texturé. Même principe de repli silencieux si
+  les fichiers sont absents.
+
 Où les trouver (tout en CC0, aucune attribution requise)
 --------------------------------------------------------
   Arbres, rochers   Kenney Nature Kit — 330 modèles
@@ -28,6 +38,9 @@ Où les trouver (tout en CC0, aucune attribution requise)
                     https://kenney.nl/assets/modular-characters
                     Quaternius Universal Base Characters
                     https://quaternius.com/packs/universalbasecharacters.html
+
+  Bâtiments         Kenney Modular Buildings — 100 pièces
+                    https://kenney.nl/assets/modular-buildings
 
 Ces packs sont livrés en .glb ou .gltf. Prends un modèle, renomme-le selon
 la liste ci-dessus, dépose-le ici. Rien d'autre à faire.

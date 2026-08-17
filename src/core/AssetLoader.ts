@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { buildRider, type RiderVisual, type RiderOptions } from '../models/RiderModel';
 import type { RiderAppearance } from '../data/appearance';
 import { SceneryAssets } from './SceneryAssets';
+import { BuildingKit } from '../race/BuildingKit';
 import { Sky } from '../race/Sky';
 
 /**
@@ -22,6 +23,8 @@ export class AssetLoader {
   private tried = false;
   /** décor externe optionnel (arbres, rochers, barrières, spectateurs) */
   readonly scenery = new SceneryAssets();
+  /** immeubles assemblés à partir de vrais modèles 3D, optionnel */
+  readonly buildings = new BuildingKit();
   /** panoramas de ciel photographiques */
   readonly sky = new Sky();
 
@@ -36,7 +39,7 @@ export class AssetLoader {
       .catch(() => {
         this.riderTemplate = null; // pas de GLB : modèle procédural
       });
-    await Promise.all([rider, this.scenery.preload(), this.sky.preload()]);
+    await Promise.all([rider, this.scenery.preload(), this.buildings.preload(), this.sky.preload()]);
   }
 
   createRider(appearance: RiderAppearance, options: RiderOptions = {}): RiderVisual {

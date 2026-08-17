@@ -203,7 +203,7 @@ export class Race {
     this.porteurJaune = jerseys.general;
     for (const r of roster) this.teamOf.set(r.id, r.team);
     const regl = reglage(difficulty);
-    this.track = new Track(stage, assets.scenery, quality);
+    this.track = new Track(stage, assets.scenery, quality, assets.buildings);
 
     // retard au général de chaque coureur : sert à savoir qui le peloton
     // laissera partir et qui il chassera

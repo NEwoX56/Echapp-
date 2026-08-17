@@ -12,6 +12,13 @@ Noms de fichiers reconnus
   barrier.glb          barrière (~2 m de long)
   spectator.glb        spectateur debout
 
+  Chacun accepte aussi des variantes numérotées, tirées au hasard à
+  l'instanciation : tree-pine-2.glb, tree-pine-3.glb, rock-2.glb, etc.
+  (jusqu'à 5 variantes par nom). Sans elles, tous les arbres d'une forêt
+  sont un copier-coller du même modèle, ce qui se voit au premier coup
+  d'œil. La livraison en compte déjà 5 pour les arbres et 4 pour les
+  rochers.
+
   building-wall-a.glb   étage de tour, une façade avec fenêtres
   building-wall-b.glb   étage de tour, une façade avec baie vitrée
   building-ground.glb   rez-de-chaussée avec entrée

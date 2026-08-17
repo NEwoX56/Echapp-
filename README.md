@@ -846,6 +846,18 @@ la route, qui change à chaque étape, donc aucun modèle figé ne peut convenir
 Une chaîne de sommets lointains ferme l'horizon (`buildDistantRange`) ; elle
 suit le coureur comme un décor de fond, sans quoi il finirait par la traverser.
 
+**Variété et bâtiments.** Chaque nom de fichier accepte des variantes
+numérotées (`tree-pine-2.glb`, `rock-3.glb`, jusqu'à cinq), tirées au hasard
+par instance — sans elles, une forêt entière répète le même arbre, ce qui se
+voit immédiatement. Les zones de forêt, littoral et haute montagne de
+`Decor.ts` (bosquets, rochers côtiers, éboulis) piochent maintenant dans ces
+mêmes modèles ; jusque-là seul le semis de base de `Track.ts` en profitait,
+et les zones les plus denses en arbres restaient cônes et sphères
+procéduraux. Les tours de ville vont plus loin : `BuildingKit.ts` les
+assemble à partir de vraies pièces modulaires (étages avec fenêtres,
+rez-de-chaussée, toit) plutôt qu'un bloc unique texturé — voir
+`public/models/scenery/LISEZMOI.txt`.
+
 ## Remplacer le coureur par un modèle 3D externe
 
 Dépose `public/models/rider.glb` : `AssetLoader` le détecte et remplace le

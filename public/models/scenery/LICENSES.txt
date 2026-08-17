@@ -2,8 +2,19 @@ Origine des modèles 3D de ce dossier
 =====================================
 
 tree-pine.glb        Kenney Nature Kit (2.1) — tree_pineTallA_detailed.glb
+tree-pine-2.glb      Kenney Nature Kit (2.1) — tree_pineTallB_detailed.glb
+tree-pine-3.glb      Kenney Nature Kit (2.1) — tree_pineTallC_detailed.glb
+tree-pine-4.glb      Kenney Nature Kit (2.1) — tree_pineRoundA.glb
+tree-pine-5.glb      Kenney Nature Kit (2.1) — tree_pineRoundD.glb
 tree-broadleaf.glb   Kenney Nature Kit (2.1) — tree_oak.glb
+tree-broadleaf-2.glb Kenney Nature Kit (2.1) — tree_detailed.glb
+tree-broadleaf-3.glb Kenney Nature Kit (2.1) — tree_fat.glb
+tree-broadleaf-4.glb Kenney Nature Kit (2.1) — tree_plateau.glb
+tree-broadleaf-5.glb Kenney Nature Kit (2.1) — tree_default.glb
 rock.glb             Kenney Nature Kit (2.1) — rock_largeA.glb
+rock-2.glb           Kenney Nature Kit (2.1) — rock_largeC.glb
+rock-3.glb           Kenney Nature Kit (2.1) — rock_tallB.glb
+rock-4.glb           Kenney Nature Kit (2.1) — rock_smallA.glb
 barrier.glb          Kenney Racing Kit (2.0) — barrierWhite.glb
 building-wall-a.glb  Kenney Modular Buildings — modularBuildings_021.gltf
 building-wall-b.glb  Kenney Modular Buildings — modularBuildings_046.gltf

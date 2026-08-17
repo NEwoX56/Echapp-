@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { StageDef, StageType } from '../data/types';
 import type { BuildingKit } from './BuildingKit';
+import type { SceneryAssets, SceneryPiece } from '../core/SceneryAssets';
 
 /**
  * Paysages traversés.
@@ -155,17 +156,20 @@ export class Decor {
   private tmp = new THREE.Vector3();
   private tan = new THREE.Vector3();
   private buildings: BuildingKit | null;
+  private scenery: SceneryAssets | null;
 
   constructor(
     piste: PisteDecor,
     stage: StageDef,
     q: ReglagesDecor,
     rand: () => number,
-    buildings: BuildingKit | null = null
+    buildings: BuildingKit | null = null,
+    scenery: SceneryAssets | null = null
   ) {
     this.piste = piste;
     this.q = q;
     this.buildings = buildings?.available ? buildings : null;
+    this.scenery = scenery?.hasAny ? scenery : null;
     this.zones = decouperZones(stage, rand);
 
     for (const z of this.zones) {
@@ -558,6 +562,10 @@ export class Decor {
     const cypres: Placement[] = [];
     const feuillus: Placement[] = [];
     const arbustes: Placement[] = [];
+    // vrais modèles 3D, quand disponibles : un lot par pièce piochée, sans
+    // quoi un bosquet entier répète le même arbre
+    const glbEpiceas = new Map<SceneryPiece, Placement[]>();
+    const glbFeuillus = new Map<SceneryPiece, Placement[]>();
     const pas = 7 / Math.max(0.3, d);
 
     for (let x = z.from; x < z.to; x += pas) {
@@ -578,11 +586,30 @@ export class Decor {
           arbustes.push({ ...base, scale: new THREE.Vector3(s * 0.8, s * 0.7, s * 0.8) });
           continue;
         }
-        troncs.push(base);
-        const haut = { ...base, y: y + 1.4 * s, scale: new THREE.Vector3(s, s * (1 + rand() * 0.5), s) };
-        if (tirage < 0.12 + 0.5 * altitude + 0.18) epiceas.push(haut);
-        else if (tirage < 0.62) feuillus.push({ ...haut, y: y + 1.9 * s });
-        else cypres.push(haut);
+        if (tirage < 0.12 + 0.5 * altitude + 0.18) {
+          const piece = this.scenery?.getRandom('treePine', rand);
+          if (piece) {
+            const liste = glbEpiceas.get(piece) ?? [];
+            liste.push(base);
+            glbEpiceas.set(piece, liste);
+          } else {
+            troncs.push(base);
+            epiceas.push({ ...base, y: y + 1.4 * s, scale: new THREE.Vector3(s, s * (1 + rand() * 0.5), s) });
+          }
+        } else if (tirage < 0.62) {
+          const piece = this.scenery?.getRandom('treeBroadleaf', rand);
+          if (piece) {
+            const liste = glbFeuillus.get(piece) ?? [];
+            liste.push(base);
+            glbFeuillus.set(piece, liste);
+          } else {
+            troncs.push(base);
+            feuillus.push({ ...base, y: y + 1.9 * s, scale: new THREE.Vector3(s, s * (1 + rand() * 0.5), s) });
+          }
+        } else {
+          troncs.push(base);
+          cypres.push({ ...base, y: y + 1.4 * s, scale: new THREE.Vector3(s, s * (1 + rand() * 0.5), s) });
+        }
       }
     }
 
@@ -628,6 +655,13 @@ export class Decor {
       () => vert(0x4a7a3a),
       arbustes
     );
+    let gi = 0;
+    for (const [piece, places] of glbEpiceas) {
+      this.ajouter(`glb-epicea-${gi++}`, () => piece.geometry, () => piece.material, places, true, true);
+    }
+    for (const [piece, places] of glbFeuillus) {
+      this.ajouter(`glb-feuillu-${gi++}`, () => piece.geometry, () => piece.material, places, true, true);
+    }
   }
 
   /** rangs de vigne, alignés perpendiculairement à la route */
@@ -667,6 +701,7 @@ export class Decor {
     const troncs: Placement[] = [];
     const palmes: Placement[] = [];
     const rochers: Placement[] = [];
+    const glbRochers = new Map<SceneryPiece, Placement[]>();
     const pas = 16 / Math.max(0.35, this.q.densiteDecor);
     for (let x = z.from; x < z.to; x += pas) {
       for (const side of [-1, 1]) {
@@ -689,13 +724,21 @@ export class Decor {
       }
       if (rand() < 0.45) {
         const lat = (rand() > 0.5 ? 1 : -1) * (30 + rand() * 40);
-        rochers.push({
+        const place = {
           dist: x,
           lat,
           y: this.piste.groundAt(x, lat),
           rotY: rand() * 6.28,
           scale: new THREE.Vector3(1 + rand(), 0.7 + rand() * 0.6, 1 + rand())
-        });
+        };
+        const piece = this.scenery?.getRandom('rock', rand);
+        if (piece) {
+          const liste = glbRochers.get(piece) ?? [];
+          liste.push(place);
+          glbRochers.set(piece, liste);
+        } else {
+          rochers.push(place);
+        }
       }
     }
     this.ajouter(
@@ -718,11 +761,16 @@ export class Decor {
       rochers,
       true
     );
+    let gri = 0;
+    for (const [piece, places] of glbRochers) {
+      this.ajouter(`glb-rocher-cote-${gri++}`, () => piece.geometry, () => piece.material, places, true, true);
+    }
   }
 
   /** haute montagne : éboulis, blocs et névés */
   private hauteMontagne(z: Zone, rand: () => number): void {
     const blocs: Placement[] = [];
+    const glbBlocs = new Map<SceneryPiece, Placement[]>();
     const neiges: Placement[] = [];
     const pas = 11 / Math.max(0.35, this.q.densiteDecor);
     for (let x = z.from; x < z.to; x += pas) {
@@ -731,13 +779,21 @@ export class Decor {
         const lat = side * (11 + rand() * 60);
         const y = this.piste.groundAt(x, lat);
         const s = 0.5 + rand() * 1.6;
-        blocs.push({
+        const blocPlace = {
           dist: x,
           lat,
           y,
           rotY: rand() * 6.28,
           scale: new THREE.Vector3(s, s * (0.6 + rand() * 0.6), s)
-        });
+        };
+        const blocPiece = this.scenery?.getRandom('rock', rand);
+        if (blocPiece) {
+          const liste = glbBlocs.get(blocPiece) ?? [];
+          liste.push(blocPlace);
+          glbBlocs.set(blocPiece, liste);
+        } else {
+          blocs.push(blocPlace);
+        }
         if (y > 70 && rand() < 0.35) {
           neiges.push({
             dist: x,
@@ -762,6 +818,10 @@ export class Decor {
       () => new THREE.MeshStandardMaterial({ color: 0xe8eef5, roughness: 0.75 }),
       neiges
     );
+    let gbi = 0;
+    for (const [piece, places] of glbBlocs) {
+      this.ajouter(`glb-bloc-${gbi++}`, () => piece.geometry, () => piece.material, places, true, true);
+    }
   }
 
   private champs(z: Zone, rand: () => number): void {

@@ -19,6 +19,11 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
  *   barrier.glb          barrière de course (~2 m de long)
  *   spectator.glb        spectateur debout (~1,75 m)
  *
+ * Chacun accepte aussi des variantes numérotées — tree-pine-2.glb,
+ * tree-pine-3.glb, etc. — piochées au hasard à l'instanciation. Sans elles,
+ * une forêt entière répète le même arbre : la première variante venait
+ * seule, ce qui se voyait immédiatement sur un flanc de montagne couvert.
+ *
  * Conventions : orienté +Z, origine au sol (y=0), échelle en mètres.
  * L'échelle est corrigée automatiquement si le modèle est trop grand ou
  * trop petit (voir `normalise`).
@@ -41,6 +46,9 @@ const FILES = {
 
 export type SceneryKey = keyof typeof FILES;
 
+/** nombre de variantes numérotées tentées en plus du fichier principal */
+const VARIANTS = 5;
+
 /** hauteur attendue de chaque élément, sert à recaler l'échelle */
 const TARGET_HEIGHT: Record<SceneryKey, number> = {
   treePine: 6.5,
@@ -52,16 +60,25 @@ const TARGET_HEIGHT: Record<SceneryKey, number> = {
 
 export class SceneryAssets {
   private loader = new GLTFLoader();
-  private pieces = new Map<SceneryKey, SceneryPiece>();
+  private pools = new Map<SceneryKey, SceneryPiece[]>();
   private loaded = false;
 
   /** true si au moins un modèle externe a été trouvé */
   get hasAny(): boolean {
-    return this.pieces.size > 0;
+    return this.pools.size > 0;
   }
 
+  /** une pièce quelconque de la variété disponible, ou null */
   get(key: SceneryKey): SceneryPiece | null {
-    return this.pieces.get(key) ?? null;
+    const pool = this.pools.get(key);
+    return pool?.[0] ?? null;
+  }
+
+  /** une pièce tirée au hasard dans la variété disponible, ou null */
+  getRandom(key: SceneryKey, rand: () => number = Math.random): SceneryPiece | null {
+    const pool = this.pools.get(key);
+    if (!pool?.length) return null;
+    return pool[Math.floor(rand() * pool.length)];
   }
 
   async preload(): Promise<void> {
@@ -69,15 +86,21 @@ export class SceneryAssets {
     this.loaded = true;
     await Promise.all(
       (Object.keys(FILES) as SceneryKey[]).map(async (key) => {
-        try {
-          const gltf = await this.loader.loadAsync(`models/scenery/${FILES[key]}.glb`);
-          const piece = this.flatten(gltf.scene, key);
-          if (piece) this.pieces.set(key, piece);
-        } catch {
-          /* fichier absent : on garde la version procédurale */
-        }
+        const noms = [FILES[key], ...Array.from({ length: VARIANTS }, (_, i) => `${FILES[key]}-${i + 2}`)];
+        const pieces = await Promise.all(noms.map((nom) => this.loadPiece(nom, key)));
+        const trouvees = pieces.filter((p): p is SceneryPiece => p !== null);
+        if (trouvees.length) this.pools.set(key, trouvees);
       })
     );
+  }
+
+  private async loadPiece(nom: string, key: SceneryKey): Promise<SceneryPiece | null> {
+    try {
+      const gltf = await this.loader.loadAsync(`models/scenery/${nom}.glb`);
+      return this.flatten(gltf.scene, key);
+    } catch {
+      return null; // fichier absent : cette variante n'existe pas
+    }
   }
 
   /**
@@ -168,10 +191,12 @@ export class SceneryAssets {
   }
 
   dispose(): void {
-    for (const p of this.pieces.values()) {
-      p.geometry.dispose();
-      p.material.dispose();
+    for (const pool of this.pools.values()) {
+      for (const p of pool) {
+        p.geometry.dispose();
+        p.material.dispose();
+      }
     }
-    this.pieces.clear();
+    this.pools.clear();
   }
 }

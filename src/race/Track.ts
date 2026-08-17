@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { StageDef, ClimbDef, SprintDef } from '../data/types';
-import type { SceneryAssets } from '../core/SceneryAssets';
+import type { SceneryAssets, SceneryPiece } from '../core/SceneryAssets';
 import type { BuildingKit } from './BuildingKit';
 import type { QualitySettings } from '../core/Quality';
 import { Decor } from './Decor';
@@ -121,7 +121,7 @@ export class Track {
     this.decor = new Decor(this, stage, {
       densiteDecor: this.q.densiteDecor ?? 1,
       shadows: this.q.shadows !== false
-    }, rand, buildings);
+    }, rand, buildings, scenery);
     this.group.add(this.decor.group);
 
     this.buildScenery(rand);
@@ -752,20 +752,25 @@ export class Track {
     const dd = this.q.densiteDecor ?? 1;
     const count = Math.floor((this.length / (mountain ? 30 : 20)) * dd);
 
-    // modèle externe fourni ? il remplace le cône procédural
-    const treePiece = this.scenery?.get(mountain ? 'treePine' : 'treeBroadleaf') ?? null;
-    if (treePiece) {
-      const spots: { dist: number; lat: number; y: number; scale: number; rotY: number }[] = [];
+    // modèles externes fournis ? ils remplacent le cône procédural — plusieurs
+    // variantes tirées au hasard par arbre, sans quoi la forêt entière répète
+    // le même modèle et ça se voit immédiatement sur un flanc de montagne
+    const cle = mountain ? 'treePine' : 'treeBroadleaf';
+    if (this.scenery?.get(cle)) {
+      const parPiece = new Map<SceneryPiece, { dist: number; lat: number; y: number; scale: number; rotY: number }[]>();
       for (let i = 0; i < count; i++) {
         const dist = rand() * this.length;
         for (const side of [-1, 1]) {
           const lat = side * (ROAD_WIDTH / 2 + 4.5 + rand() * (mountain ? 70 : 40));
           const y = this.groundAt(dist, lat);
           if (y > 120) continue; // pas d'arbres sur les hauts sommets
-          spots.push({ dist, lat, y, scale: 0.72 + rand() * 0.6, rotY: rand() * 6.28 });
+          const piece = this.scenery!.getRandom(cle, rand)!;
+          const liste = parPiece.get(piece) ?? [];
+          liste.push({ dist, lat, y, scale: 0.72 + rand() * 0.6, rotY: rand() * 6.28 });
+          parPiece.set(piece, liste);
         }
       }
-      this.placeInstances(treePiece, spots);
+      for (const [piece, spots] of parPiece) this.placeInstances(piece, spots);
       this.buildRocks(rand, mountain);
       return;
     }
@@ -842,24 +847,20 @@ export class Track {
     const pos = new THREE.Vector3();
 
     if (mountain || this.stage.type === 'vallonnee') {
-      const rockPiece = this.scenery?.get('rock') ?? null;
-      if (rockPiece) {
+      if (this.scenery?.get('rock')) {
         const n = Math.floor((this.length / 55) * (this.q.densiteDecor ?? 1));
-        const spots: { dist: number; lat: number; y: number; scale: number; rotY: number }[] = [];
+        const parPiece = new Map<SceneryPiece, { dist: number; lat: number; y: number; scale: number; rotY: number }[]>();
         for (let i = 0; i < n; i++) {
           const dist = rand() * this.length;
           for (const side of [-1, 1]) {
             const lat = side * (ROAD_WIDTH / 2 + 6 + rand() * 120);
-            spots.push({
-              dist,
-              lat,
-              y: this.groundAt(dist, lat),
-              scale: 0.45 + rand() * 1.9,
-              rotY: rand() * 6.28
-            });
+            const piece = this.scenery!.getRandom('rock', rand)!;
+            const liste = parPiece.get(piece) ?? [];
+            liste.push({ dist, lat, y: this.groundAt(dist, lat), scale: 0.45 + rand() * 1.9, rotY: rand() * 6.28 });
+            parPiece.set(piece, liste);
           }
         }
-        this.placeInstances(rockPiece, spots);
+        for (const [piece, spots] of parPiece) this.placeInstances(piece, spots);
         return;
       }
       const rockGeo = new THREE.DodecahedronGeometry(1, 0);

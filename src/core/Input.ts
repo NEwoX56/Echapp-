@@ -238,6 +238,11 @@ export class Input {
     return this.takePressed('g') || this.takePadPressed(BTN.nord) || this.takePadPressed(BTN.r1);
   }
 
+  /** changer d'angle de caméra : C, ou Select / Share en secours */
+  get changeCamera(): boolean {
+    return this.takePressed('c') || this.takePadPressed(BTN.select);
+  }
+
   /* ---------------- navigation dans les menus ---------------- */
 
   /** valider : A / Croix, ou Entrée */

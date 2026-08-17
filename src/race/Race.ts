@@ -129,6 +129,13 @@ export class Race {
   private onEvent: (msg: string) => void;
   private feedZoneDone = false;
 
+  /** angle de caméra pendant la course ; l'arrivée et le décompte gardent leur mise en scène propre */
+  private static readonly CAMERA_MODES = ['chase', 'cockpit', 'tv', 'aerial'] as const;
+  private cameraModeIndex = 0;
+  private get cameraMode(): (typeof Race.CAMERA_MODES)[number] {
+    return Race.CAMERA_MODES[this.cameraModeIndex];
+  }
+
   /** points marqués pendant l'étape */
   private pointsMap = new Map<string, StagePoints>();
   private passedSprints = new Set<number>();
@@ -357,7 +364,18 @@ export class Race {
     return ((p[p.length - 1][1] - p[0][1]) / this.track.length) * 100;
   }
 
+  private static readonly CAMERA_LABELS: Record<(typeof Race.CAMERA_MODES)[number], string> = {
+    chase: 'Caméra : poursuite',
+    cockpit: 'Caméra : cintre',
+    tv: 'Caméra : moto TV',
+    aerial: 'Caméra : drone'
+  };
+
   handleInput(input: Input, dt: number): void {
+    if (input.changeCamera) {
+      this.cameraModeIndex = (this.cameraModeIndex + 1) % Race.CAMERA_MODES.length;
+      this.onEvent(Race.CAMERA_LABELS[this.cameraMode]);
+    }
     const p = this.player;
     if (p.finished) return;
     if (input.accelerate) p.effort = Math.min(1, p.effort + dt * 0.9);
@@ -918,21 +936,68 @@ export class Race {
 
     const d = Math.max(0, Math.min(p.dist, this.track.length));
     this.track.pose(d, p.lane, this.tmp, this.tan);
-    // la caméra recule et s'abaisse légèrement avec la vitesse
-    const back = this.tan.clone().multiplyScalar(-(7.0 + p.speed * 0.11));
-    const target = this.tmp
-      .clone()
-      .add(back)
-      .add(new THREE.Vector3(0, 2.9 + p.standing * 0.18, 0));
-    const look = this.tmp
-      .clone()
-      .add(this.tan.clone().multiplyScalar(10))
-      .add(new THREE.Vector3(0, 1.15, 0));
+    const perp = new THREE.Vector3(-this.tan.z, 0, this.tan.x).normalize();
+
+    /*
+     * Quatre angles, cyclés à la touche C. L'arrivée et le décompte gardent
+     * leur propre mise en scène (branches précédentes) : ceci ne s'applique
+     * qu'au roulage normal.
+     */
+    let target: THREE.Vector3;
+    let look: THREE.Vector3;
+    let vitesseSuivi: number;
+    switch (this.cameraMode) {
+      case 'cockpit':
+        // depuis le cintre : bas, collé au coureur, regard loin devant
+        target = this.tmp
+          .clone()
+          .add(this.tan.clone().multiplyScalar(1.15))
+          .add(new THREE.Vector3(0, 1.42 - p.standing * 0.1, 0));
+        look = this.tmp
+          .clone()
+          .add(this.tan.clone().multiplyScalar(40))
+          .add(new THREE.Vector3(0, 1.2, 0));
+        vitesseSuivi = 9;
+        break;
+      case 'tv':
+        // moto de retransmission calée sur le flanc, comme à la télévision
+        target = this.tmp
+          .clone()
+          .add(perp.clone().multiplyScalar(7.5))
+          .add(this.tan.clone().multiplyScalar(-1.5))
+          .add(new THREE.Vector3(0, 2.1, 0));
+        look = this.tmp.clone().add(new THREE.Vector3(0, 1.2, 0));
+        vitesseSuivi = 3;
+        break;
+      case 'aerial':
+        // drone : haut et reculé, pour juger le peloton et le tracé
+        target = this.tmp
+          .clone()
+          .add(this.tan.clone().multiplyScalar(-(22 + p.speed * 0.12)))
+          .add(new THREE.Vector3(0, 16, 0));
+        look = this.tmp
+          .clone()
+          .add(this.tan.clone().multiplyScalar(14))
+          .add(new THREE.Vector3(0, 1, 0));
+        vitesseSuivi = 2.2;
+        break;
+      default:
+        // poursuite : la caméra recule et s'abaisse légèrement avec la vitesse
+        target = this.tmp
+          .clone()
+          .add(this.tan.clone().multiplyScalar(-(7.0 + p.speed * 0.11)))
+          .add(new THREE.Vector3(0, 2.9 + p.standing * 0.18, 0));
+        look = this.tmp
+          .clone()
+          .add(this.tan.clone().multiplyScalar(10))
+          .add(new THREE.Vector3(0, 1.15, 0));
+        vitesseSuivi = 3.5;
+    }
     if (snap) {
       this.camPos.copy(target);
       this.camLook.copy(look);
     } else {
-      const k = Math.min(1, dt * 3.5);
+      const k = Math.min(1, dt * vitesseSuivi);
       this.camPos.lerp(target, k);
       this.camLook.lerp(look, k);
     }

@@ -28,6 +28,7 @@ Le dossier `dist/` se dépose directement sur Netlify (glisser-déposer).
 | Espace / Maj | sprint et attaque — le coureur passe en danseuse |
 | B | boire un bidon (+26 énergie, absorbée progressivement) |
 | G | avaler un gel (+16 énergie immédiate) |
+| C | changer d'angle de caméra (poursuite, cintre, moto TV, drone) |
 
 ### Manette
 
@@ -44,6 +45,7 @@ comportent exactement pareil.
 | A | Croix | sprint et danseuse — et valider dans les menus |
 | X, ou LB | Carré, ou L1 | boire un bidon |
 | Y, ou RB | Triangle, ou R1 | avaler un gel |
+| Select | Share | changer d'angle de caméra |
 | Start | Options | plein écran |
 | LB / RB | L1 / R1 | changer d'onglet dans le menu |
 
@@ -219,6 +221,22 @@ pendant que la caméra continuait. La courbe se prolonge désormais en ligne
 droite dans l'axe, la route et le terrain sont construits sur cent cinquante
 unités supplémentaires, et les coureurs roulent sur leur élan dans ce
 dégagement.
+
+## Angles de caméra
+
+Quatre angles, cyclés à la touche **C** (Select à la manette) pendant le
+roulage normal — l'arrivée et le décompte de départ gardent leur propre mise
+en scène, décrite ci-dessus, que le mode choisi ne modifie pas.
+
+| Angle | Vue |
+|---|---|
+| Poursuite | par défaut : derrière le coureur, recule légèrement avec la vitesse |
+| Cintre | à hauteur d'œil, collé au guidon, regard loin devant — la position du coureur sur la route |
+| Moto TV | de profil, calée sur le flanc, comme une moto de retransmission |
+| Drone | haute et reculée, pour juger le peloton et le tracé d'ensemble |
+
+La caméra cintre est positionnée en avant du point de pose du coureur : trop
+proche, elle se retrouvait à l'intérieur de son propre casque.
 
 ## Véhicules de course
 

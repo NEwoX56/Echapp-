@@ -160,7 +160,7 @@ export class Menu {
             <span><b>A</b> Sélectionner</span>
           </span>
           <span class="bb-points" id="hero-nav"></span>
-          <span class="bb-clavier" id="menu-foot">↑↓ allure · ←→ placement · ESPACE sprint · B bidon · G gel</span>
+          <span class="bb-clavier" id="menu-foot">↑↓ allure · ←→ placement · ESPACE sprint · B bidon · G gel · C caméra</span>
           <span class="pad-aide hidden" id="pad-aide"></span>
         </footer>
       </div>
@@ -668,8 +668,8 @@ export class Menu {
     const foot = this.root.querySelector('#menu-foot');
     if (foot) {
       foot.textContent = this.padConnected
-        ? 'RT allure · LT ralentir · stick placement · A sprint · X bidon · Y gel · LB/RB onglets'
-        : '↑↓ allure · ←→ placement · ESPACE sprint/danseuse · B bidon · G gel';
+        ? 'RT allure · LT ralentir · stick placement · A sprint · X bidon · Y gel · Select caméra · LB/RB onglets'
+        : '↑↓ allure · ←→ placement · ESPACE sprint/danseuse · B bidon · G gel · C caméra';
     }
     const aide = this.root.querySelector('#pad-aide');
     if (aide) aide.classList.toggle('hidden', !this.padConnected);

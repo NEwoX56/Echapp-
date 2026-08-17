@@ -1,0 +1,14 @@
+Origine des modèles 3D de ce dossier
+=====================================
+
+tree-pine.glb        Kenney Nature Kit (2.1) — tree_pineTallA_detailed.glb
+tree-broadleaf.glb   Kenney Nature Kit (2.1) — tree_oak.glb
+rock.glb             Kenney Nature Kit (2.1) — rock_largeA.glb
+barrier.glb          Kenney Racing Kit (2.0) — barrierWhite.glb
+
+Source : https://kenney.nl (Kenney)
+Licence : CC0 1.0 Universal (domaine public)
+http://creativecommons.org/publicdomain/zero/1.0/
+
+Utilisation libre, y compris commerciale, sans attribution requise.
+Citer Kenney est apprécié mais pas obligatoire.

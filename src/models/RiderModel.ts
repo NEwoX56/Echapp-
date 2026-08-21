@@ -397,8 +397,8 @@ export function buildRider(a: RiderAppearance, options: RiderOptions = {}): Ride
   const gVent = new THREE.BoxGeometry(0.02, 0.042, 0.075);
   const gGlasses = new THREE.SphereGeometry(0.085, 14, 8, 0, Math.PI, Math.PI * 0.4, Math.PI * 0.24);
   const gStrap = new THREE.TorusGeometry(0.062, 0.005, 4, 12, Math.PI);
-  // barbe : calotte partielle qui enveloppe la mâchoire, courte ou pleine selon l'échelle
-  const gBeard = new THREE.SphereGeometry(0.058, 10, 8, 0, Math.PI * 2, Math.PI * 0.28, Math.PI * 0.55);
+  // barbe : sphère pleine posée sur la mâchoire, courte ou pleine selon l'échelle
+  const gBeard = new THREE.SphereGeometry(0.06, 10, 8);
   // brassard façon tatouage : anneau posé autour du bras
   const gTattoo = new THREE.TorusGeometry(0.044, 0.007, 5, 12);
   // membres : le renflement musculaire vient du scale, la capsule reste bon marché
@@ -666,11 +666,11 @@ export function buildRider(a: RiderAppearance, options: RiderOptions = {}): Ride
     // lunettes enveloppantes
     makePart(gGlasses, M.glasses, [0, 0.046, 0.044], [0.12, 0, 0], [1.05, 1, 1.1])
   ];
-  // barbe : enveloppe la mâchoire, plus large et plus basse en version pleine
+  // barbe : posée sur la mâchoire, qu'elle enveloppe et déborde légèrement
   if (a.beard === 'courte') {
-    headParts.push(makePart(gBeard, M.beard, [0, -0.008, 0.082], undefined, [0.82, 0.62, 0.72]));
+    headParts.push(makePart(gBeard, M.beard, [0, 0.006, 0.086], undefined, [0.8, 0.66, 0.76]));
   } else if (a.beard === 'pleine') {
-    headParts.push(makePart(gBeard, M.beard, [0, -0.014, 0.08], undefined, [1.02, 0.92, 0.92]));
+    headParts.push(makePart(gBeard, M.beard, [0, -0.004, 0.086], undefined, [1.0, 0.88, 0.92]));
   }
   const headMesh = mergeParts(headParts, owned)!;
   neck.add(headMesh);

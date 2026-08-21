@@ -19,8 +19,10 @@ export const TOURS: TourDef[] = [
         displayKm: 168,
         seed: 11,
         profile: [[0, 4], [0.25, 9], [0.45, 5], [0.7, 11], [0.88, 6], [1, 4]],
-        description: 'Étape rapide pour lancer le tour. Gros sprint attendu.',
-        sprints: [{ at: 0.55, name: 'Sprint de Vaugelles' }]
+        description:
+          "Étape rapide pour lancer le tour. Un secteur de chemin de terre en milieu de parcours, puis gros sprint attendu.",
+        sprints: [{ at: 0.55, name: 'Sprint de Vaugelles' }],
+        paves: [{ from: 0.16, to: 0.22, name: 'Chemin des Sources' }]
       },
       {
         id: 'cimes-2',
@@ -34,12 +36,14 @@ export const TOURS: TourDef[] = [
           [0.68, 46], [0.8, 22], [0.9, 38], [1, 12]
         ],
         meteo: 'pluie',
-        description: 'Succession de côtes sous la pluie. Terrain à puncheurs et baroudeurs.',
+        description:
+          "Succession de côtes sous la pluie. Terrain à puncheurs et baroudeurs, plateau exposé au vent dès le départ.",
         climbs: [
           { at: 0.4, name: 'Côte de Solmagne', category: 3 },
           { at: 0.68, name: 'Mur de Fayet', category: 2 }
         ],
-        sprints: [{ at: 0.5, name: 'Sprint de Solmagne' }]
+        sprints: [{ at: 0.5, name: 'Sprint de Solmagne' }],
+        vent: [{ from: 0.06, to: 0.15, name: 'Plateau de Solmagne' }]
       },
       {
         id: 'cimes-3',
@@ -123,7 +127,8 @@ export const TOURS: TourDef[] = [
           { at: 0.88, name: 'Falaise Noire', category: 3 }
         ],
         sprints: [{ at: 0.5, name: 'Sprint des Falaises' }],
-        mer: true
+        mer: true,
+        vent: [{ from: 0.02, to: 0.09, name: 'Corniche d\'Argent' }]
       },
       {
         id: 'lit-3',
@@ -284,7 +289,8 @@ export const TOURS: TourDef[] = [
           { at: 0.5, name: 'Rampe de Volta', category: 3 },
           { at: 0.8, name: 'Bosse du Plateau', category: 3 }
         ],
-        sprints: [{ at: 0.64, name: 'Sprint de Volta' }]
+        sprints: [{ at: 0.64, name: 'Sprint de Volta' }],
+        vent: [{ from: 0.06, to: 0.15, name: 'Plateau de Volta' }]
       },
       {
         id: 'tra-7',
@@ -371,7 +377,8 @@ export const TOURS: TourDef[] = [
           { at: 0.66, name: 'Mur de Fayet', category: 2 },
           { at: 0.9, name: 'Côte de l\'Abbaye', category: 3 }
         ],
-        sprints: [{ at: 0.52, name: 'Sprint de Solmagne' }]
+        sprints: [{ at: 0.52, name: 'Sprint de Solmagne' }],
+        paves: [{ from: 0.02, to: 0.06, name: 'Chemin de Solmagne' }]
       },
       {
         id: 'cou-4',
@@ -468,7 +475,8 @@ export const TOURS: TourDef[] = [
         periode: 'crepuscule',
         description: 'Dernière chance pour les baroudeurs, dans la lumière du soir.',
         climbs: [{ at: 0.25, name: 'Côte d\'Altis', category: 3 }],
-        sprints: [{ at: 0.6, name: 'Sprint d\'Altis' }]
+        sprints: [{ at: 0.6, name: 'Sprint d\'Altis' }],
+        vent: [{ from: 0.82, to: 0.9, name: 'Plaine d\'Altis' }]
       },
       {
         id: 'cou-10',
@@ -478,8 +486,10 @@ export const TOURS: TourDef[] = [
         displayKm: 104,
         seed: 423,
         profile: [[0, 20], [0.4, 24], [0.7, 18], [1, 22]],
-        description: 'Parade puis sprint final. Le vainqueur lève les bras.',
-        sprints: [{ at: 0.72, name: 'Sprint de la Couronne' }]
+        description:
+          "Parade sur les pavés du centre historique puis sprint final. Le vainqueur lève les bras.",
+        sprints: [{ at: 0.72, name: 'Sprint de la Couronne' }],
+        paves: [{ from: 0.18, to: 0.25, name: 'Pavés de la Couronne' }]
       }
     ]
   },
@@ -500,8 +510,9 @@ export const TOURS: TourDef[] = [
         biome: 'mediterraneen',
         profile: [[0, 15], [0.3, 22], [0.6, 10], [0.85, 18], [1, 12]],
         description:
-          "Départ vers le sud. Vignes en terrasses et villages de pierre ocre, bien loin des paysages du nord.",
-        sprints: [{ at: 0.55, name: 'Sprint de Cassaigne' }]
+          "Départ vers le sud. Vignes en terrasses et villages de pierre ocre, un chemin de terre entre les rangs, bien loin des paysages du nord.",
+        sprints: [{ at: 0.55, name: 'Sprint de Cassaigne' }],
+        paves: [{ from: 0.12, to: 0.18, name: 'Chemin des Vignes' }]
       },
       {
         id: 'midi-2',

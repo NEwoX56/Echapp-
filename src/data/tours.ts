@@ -129,10 +129,15 @@ export const TOURS: TourDef[] = [
         displayKm: 191,
         seed: 149,
         profile: [[0, 2], [0.35, 5], [0.7, 3], [1, 4]],
-        description: 'Longue étape de transition. Gestion et patience.',
+        description: 'Longue étape de transition, trois secteurs pavés à négocier.',
         sprints: [
           { at: 0.35, name: 'Sprint de Vensac' },
           { at: 0.72, name: 'Sprint des Marais' }
+        ],
+        paves: [
+          { from: 0.28, to: 0.33, name: 'Secteur de Vensac' },
+          { from: 0.5, to: 0.57, name: 'Trouée des Marais' },
+          { from: 0.78, to: 0.84, name: 'Chemin de Kerlan' }
         ]
       },
       {
@@ -201,8 +206,12 @@ export const TOURS: TourDef[] = [
         displayKm: 176,
         seed: 214,
         profile: [[0, 12], [0.3, 18], [0.6, 14], [0.9, 20], [1, 15]],
-        description: 'Vallée large et roulante. Les équipes de sprinteurs contrôlent.',
-        sprints: [{ at: 0.55, name: 'Sprint de Ferro' }]
+        description: 'Vallée large et roulante, deux secteurs pavés en fin de parcours.',
+        sprints: [{ at: 0.55, name: 'Sprint de Ferro' }],
+        paves: [
+          { from: 0.62, to: 0.68, name: 'Secteur de Ferro' },
+          { from: 0.85, to: 0.9, name: 'Pavés de la Traversée' }
+        ]
       },
       {
         id: 'tra-3',

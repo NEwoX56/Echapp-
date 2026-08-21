@@ -40,6 +40,11 @@ export interface ClimbMarker extends ClimbDef {
 export interface SprintMarker extends SprintDef {
   dist: number;
 }
+export interface PaveMarker {
+  from: number;
+  to: number;
+  name: string;
+}
 
 export class Track {
   readonly stage: StageDef;
@@ -50,6 +55,7 @@ export class Track {
   feedZoneDist = -1;
   readonly climbs: ClimbMarker[] = [];
   readonly sprints: SprintMarker[] = [];
+  readonly paveZones: PaveMarker[] = [];
   /** chaîne de sommets lointains : suit le coureur comme un décor de fond */
   private distantRange: THREE.Mesh | null = null;
 
@@ -109,6 +115,9 @@ export class Track {
 
     for (const c of stage.climbs ?? []) this.climbs.push({ ...c, dist: c.at * this.length });
     for (const s of stage.sprints ?? []) this.sprints.push({ ...s, dist: s.at * this.length });
+    for (const p of stage.paves ?? []) {
+      this.paveZones.push({ from: p.from * this.length, to: p.to * this.length, name: p.name });
+    }
 
     this.buildRoad();
     this.buildTerrain(stage.seed);
@@ -143,6 +152,12 @@ export class Track {
       }
     }
     return p[p.length - 1][1];
+  }
+
+  /** vrai si la distance donnée tombe dans un secteur pavé */
+  isPave(dist: number): boolean {
+    for (const z of this.paveZones) if (dist >= z.from && dist <= z.to) return true;
+    return false;
   }
 
   gradeAt(dist: number): number {
@@ -192,6 +207,7 @@ export class Track {
     const positions: number[] = [];
     const uvs: number[] = [];
     const indices: number[] = [];
+    const paveSegments: boolean[] = [];
     const p = new THREE.Vector3();
 
     // la route déborde après la ligne : c'est là qu'on décélère et qu'on fête
@@ -206,6 +222,8 @@ export class Track {
       if (i < segments) {
         const a = i * 2;
         indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+        const mid = ((i + 0.5) / segments) * totale;
+        paveSegments.push(this.isPave(mid));
       }
     }
     const g = new THREE.BufferGeometry();
@@ -215,11 +233,31 @@ export class Track {
     g.computeVertexNormals();
 
     const tex = this.makeAsphaltTexture();
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.94, side: THREE.DoubleSide });
-    const road = new THREE.Mesh(g, mat);
+    const matAsphalte = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.94, side: THREE.DoubleSide });
+    this.disposables.push(matAsphalte, tex);
+
+    let materials: THREE.Material | THREE.Material[] = matAsphalte;
+    if (this.paveZones.length > 0) {
+      // groupes de matériaux : un groupe par plage de segments consécutifs du
+      // même revêtement (6 indices par segment), asphalte = 0, pavés = 1
+      let start = 0;
+      let current = paveSegments[0];
+      for (let i = 1; i <= paveSegments.length; i++) {
+        if (i === paveSegments.length || paveSegments[i] !== current) {
+          g.addGroup(start * 6, (i - start) * 6, current ? 1 : 0);
+          start = i;
+          if (i < paveSegments.length) current = paveSegments[i];
+        }
+      }
+      const paveTex = this.makePaveTexture();
+      const matPave = new THREE.MeshStandardMaterial({ map: paveTex, roughness: 1, side: THREE.DoubleSide });
+      this.disposables.push(matPave, paveTex);
+      materials = [matAsphalte, matPave];
+    }
+    const road = new THREE.Mesh(g, materials);
     road.receiveShadow = true;
     this.group.add(road);
-    this.disposables.push(g, mat, tex);
+    this.disposables.push(g);
 
     // bandes de bas-côté (terre / gravier) qui adoucissent la transition
     // bas-côté large : gravier puis herbe, il recouvre le décaissement du terrain
@@ -336,6 +374,46 @@ export class Track {
     ctx.fillStyle = 'rgba(226,224,214,0.9)';
     for (let y = 0; y < h; y += 96) {
       ctx.fillRect(w / 2 - 2.5, y, 5, 44);
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.anisotropy = 8;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
+  /** pavés façon Paris-Roubaix : blocs irréguliers en quinconce, joints sombres */
+  private makePaveTexture(): THREE.CanvasTexture {
+    const w = 256;
+    const h = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d')!;
+
+    ctx.fillStyle = '#332f2a';
+    ctx.fillRect(0, 0, w, h);
+
+    const bw = 22;
+    const bh = 16;
+    for (let row = 0, y = -bh; y < h + bh; row++, y += bh) {
+      const decale = row % 2 === 0 ? 0 : bw / 2;
+      for (let x = -bw + decale; x < w + bw; x += bw) {
+        const jitter = 2.2;
+        const gx = x + (Math.random() - 0.5) * jitter;
+        const gy = y + (Math.random() - 0.5) * jitter;
+        const l = 96 + Math.random() * 60;
+        ctx.fillStyle = `rgb(${l},${l - 5},${l - 12})`;
+        ctx.fillRect(gx + 1.5, gy + 1.5, bw - 3, bh - 3);
+      }
+    }
+    for (let i = 0; i < 3000; i++) {
+      const x = Math.random() * w;
+      const y = Math.random() * h;
+      ctx.fillStyle = `rgba(20,18,16,${0.08 + Math.random() * 0.18})`;
+      ctx.fillRect(x, y, 1, 1);
     }
 
     const tex = new THREE.CanvasTexture(canvas);

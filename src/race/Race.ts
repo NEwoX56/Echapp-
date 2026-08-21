@@ -45,7 +45,7 @@ export interface RaceHudState {
   gels: number;
   standing: boolean;
   /** prochain point chaud : col ou sprint */
-  nextMarker: { kind: 'col' | 'sprint'; name: string; inMeters: number } | null;
+  nextMarker: { kind: 'col' | 'sprint' | 'pave'; name: string; inMeters: number } | null;
   gapAhead: number | null;
   gapBehind: number | null;
   /** coureurs à placer sur la mini-carte */
@@ -817,6 +817,13 @@ export class Race {
         nextMarker = { kind: 'sprint', name: s.name, inMeters: d };
       }
     }
+    for (const z of this.track.paveZones) {
+      const d = z.from - p.dist;
+      if (d > 0 && d < best) {
+        best = d;
+        nextMarker = { kind: 'pave', name: z.name, inMeters: d };
+      }
+    }
 
     const nearestAhead = ahead.length
       ? Math.min(...ahead.map((r) => r.dist)) - p.dist
@@ -1021,6 +1028,14 @@ export class Race {
     }
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.camLook);
+
+    // secousses de caméra sur les pavés : petites vibrations haute fréquence
+    if (this.track.isPave(d)) {
+      const t = this.clock * 42;
+      const amp = Math.min(0.05, 0.014 + p.speed * 0.0011);
+      this.camera.position.x += Math.sin(t) * amp;
+      this.camera.position.y += Math.sin(t * 1.7 + 1.3) * amp * 0.6;
+    }
 
     // les sommets lointains suivent le coureur : sans cela il les traverserait
     this.track.updateDistant(this.tmp);

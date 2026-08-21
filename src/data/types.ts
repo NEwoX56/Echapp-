@@ -23,6 +23,13 @@ export interface SprintDef {
   name: string;
 }
 
+/** secteur pavé : fractions 0..1 du parcours, chaussée et physique changées sur ce tronçon */
+export interface PaveDef {
+  from: number;
+  to: number;
+  name: string;
+}
+
 export interface StageDef {
   id: string;
   name: string;
@@ -41,6 +48,8 @@ export interface StageDef {
   periode?: Periode;
   /** par défaut 'sec' si absent */
   meteo?: Meteo;
+  /** secteurs pavés façon Paris-Roubaix */
+  paves?: PaveDef[];
 }
 
 export interface TourDef {

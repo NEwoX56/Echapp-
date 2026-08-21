@@ -129,6 +129,8 @@ export class Rider {
     } else if (grade < 0) {
       target *= 1 + Math.min(-grade * 0.035, 0.45);
     }
+    // pavés : chaussée irrégulière, tout le monde ralentit et encaisse les secousses
+    if (track.isPave(this.dist)) target *= 0.91;
     if (this.drafting) target *= 1.05;
     if (fringale) target *= this.specialites.has('sang-froid') ? 0.89 : 0.8;
     if (this.boostTimer > 0) {

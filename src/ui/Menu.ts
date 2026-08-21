@@ -7,11 +7,14 @@ import {
   SKIN_TONES,
   PATTERNS,
   WHEEL_STYLES,
+  HAIR_COLORS,
+  BEARD_STYLES,
   SPONSORS,
   AWARDS,
   type ClassementKey,
   type JerseyPattern,
-  type WheelStyle
+  type WheelStyle,
+  type BeardStyle
 } from '../data/appearance';
 import { profileSvg, TYPE_LABEL, formatTime, formatGap, hexColor, jerseyIconSvg, toast } from './util';
 import { logoTour } from './RaceGroups';
@@ -501,6 +504,33 @@ export class Menu {
         <div class="field">
           <span>Cuissard</span>
           <div class="sw-row">${this.swatches('shorts', a.shorts)}</div>
+        </div>
+        <div class="field">
+          <span>Couleur des cheveux</span>
+          <div class="sw-row">
+            ${HAIR_COLORS.map(
+              (t) => `<button class="sw ${t.value === (a.hairColor ?? HAIR_COLORS[1].value) ? 'active' : ''}"
+                        style="background:${hexColor(t.value)}" title="${t.label}"
+                        data-color-field="hairColor" data-color="${t.value}"></button>`
+            ).join('')}
+          </div>
+        </div>
+        <div class="field">
+          <span>Barbe</span>
+          <div class="chip-row">
+            ${BEARD_STYLES.map(
+              (b) =>
+                `<button class="chip ${(a.beard ?? 'aucune') === b.id ? 'active' : ''}" data-beard="${b.id}">${b.label}</button>`
+            ).join('')}
+          </div>
+        </div>
+        <label class="check">
+          <input type="checkbox" id="rider-tattoo" ${a.tattoo ? 'checked' : ''}>
+          Brassard tatoué
+        </label>
+        <div class="field ${a.tattoo ? '' : 'hidden'}" id="tattoo-color-field">
+          <span>Couleur du brassard</span>
+          <div class="sw-row">${this.swatches('tattooColor', a.tattooColor ?? PALETTE[6].value)}</div>
         </div>`;
     } else if (this.atelierTab === 'maillot') {
       body = `
@@ -1244,6 +1274,21 @@ export class Menu {
         b.classList.add('active');
         refresh();
       });
+    });
+
+    this.root.querySelectorAll<HTMLButtonElement>('[data-beard]').forEach((b) => {
+      b.addEventListener('click', () => {
+        save.appearance.beard = b.dataset.beard as BeardStyle;
+        this.root.querySelectorAll('[data-beard]').forEach((o) => o.classList.remove('active'));
+        b.classList.add('active');
+        refresh();
+      });
+    });
+
+    q<HTMLInputElement>('#rider-tattoo')?.addEventListener('change', (e) => {
+      save.appearance.tattoo = (e.target as HTMLInputElement).checked;
+      this.root.querySelector('#tattoo-color-field')?.classList.toggle('hidden', !save.appearance.tattoo);
+      refresh();
     });
 
     this.root.querySelectorAll<HTMLButtonElement>('[data-sponsor]').forEach((b) => {

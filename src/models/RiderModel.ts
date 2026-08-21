@@ -287,7 +287,9 @@ export function buildRider(a: RiderAppearance, options: RiderOptions = {}): Ride
       roughness: 0.08,
       metalness: 0.65,
       envMapIntensity: 1.4
-    })
+    }),
+    beard: new THREE.MeshStandardMaterial({ color: a.hairColor ?? 0x3d2817, roughness: 0.88 }),
+    tattoo: new THREE.MeshStandardMaterial({ color: a.tattooColor ?? 0x1f3a8a, roughness: 0.7 })
   };
   const jerseyTex = makeJerseyTexture(a);
   const jersey = new THREE.MeshStandardMaterial({
@@ -395,6 +397,10 @@ export function buildRider(a: RiderAppearance, options: RiderOptions = {}): Ride
   const gVent = new THREE.BoxGeometry(0.02, 0.042, 0.075);
   const gGlasses = new THREE.SphereGeometry(0.085, 14, 8, 0, Math.PI, Math.PI * 0.4, Math.PI * 0.24);
   const gStrap = new THREE.TorusGeometry(0.062, 0.005, 4, 12, Math.PI);
+  // barbe : calotte partielle qui enveloppe la mâchoire, courte ou pleine selon l'échelle
+  const gBeard = new THREE.SphereGeometry(0.058, 10, 8, 0, Math.PI * 2, Math.PI * 0.28, Math.PI * 0.55);
+  // brassard façon tatouage : anneau posé autour du bras
+  const gTattoo = new THREE.TorusGeometry(0.044, 0.007, 5, 12);
   // membres : le renflement musculaire vient du scale, la capsule reste bon marché
   const gUpperArm = new THREE.CapsuleGeometry(0.042, 0.19, 3, 7);
   const gForeArm = new THREE.CapsuleGeometry(0.034, 0.2, 3, 7);
@@ -422,7 +428,7 @@ export function buildRider(a: RiderAppearance, options: RiderOptions = {}): Ride
   const localGeos = [
     gTube, gTyre, gRimClassic, gRimDeep, gDisc, gSpoke, gHub, gSaddle, gBarTop, gBarDrop,
     gHood, gBottle, gRing, gCrankArm, gPedal, gTorso, gShoulder, gHips, gHead, gHelmet,
-    gNeck, gJaw, gHelmetTail, gVent, gGlasses, gStrap, gCalf, gSock,
+    gNeck, gJaw, gHelmetTail, gVent, gGlasses, gStrap, gBeard, gTattoo, gCalf, gSock,
     gUpperArm, gForeArm, gHand, gThigh, gShin, gShoe,
     gCassette, gChainLink, gDerailleurBody, gPulley, gDerailleurCage, gFrontDer,
     gBrakeDisc, gCaliper, gTape, gTapeTop, gCable, gSeatpost, gCage, gLogo
@@ -641,28 +647,32 @@ export function buildRider(a: RiderAppearance, options: RiderOptions = {}): Ride
   const neck = new THREE.Group();
   neck.position.set(0, 0.5, 0.08);
   torsoPivot.add(neck);
-  const headMesh = mergeParts(
-    [
-      // cou incliné : il sort du torse vers l'avant
-      makePart(gNeck, M.skin, [0, -0.035, 0.005], [0.5, 0, 0]),
-      // crâne allongé vers l'arrière
-      makePart(gHead, M.skin, [0, 0.05, 0.042], undefined, [0.9, 1, 1.18]),
-      // mâchoire et menton, en retrait sous le crâne
-      makePart(gJaw, M.skin, [0, 0.015, 0.076], undefined, [0.86, 0.76, 0.92]),
-      // casque : calotte serrée + pointe aéro à l'arrière
-      makePart(gHelmet, M.helmet, [0, 0.056, 0.036], [-0.3, 0, 0], [1.02, 0.96, 1.1]),
-      makePart(gHelmetTail, M.helmet, [0, 0.066, -0.024], [-1.15, 0, 0], [0.84, 1.55, 0.72]),
-      // aérations creusées dans la calotte
-      makePart(gVent, M.dark, [0, 0.114, 0.046]),
-      makePart(gVent, M.dark, [-0.043, 0.105, 0.034], [0, 0, 0.2]),
-      makePart(gVent, M.dark, [0.043, 0.105, 0.034], [0, 0, -0.2]),
-      // sangles sous les oreilles
-      makePart(gStrap, M.dark, [0, 0.038, 0.036], [0, 0, 0], [1, 1, 0.55]),
-      // lunettes enveloppantes
-      makePart(gGlasses, M.glasses, [0, 0.046, 0.044], [0.12, 0, 0], [1.05, 1, 1.1])
-    ],
-    owned
-  )!;
+  const headParts: Part[] = [
+    // cou incliné : il sort du torse vers l'avant
+    makePart(gNeck, M.skin, [0, -0.035, 0.005], [0.5, 0, 0]),
+    // crâne allongé vers l'arrière
+    makePart(gHead, M.skin, [0, 0.05, 0.042], undefined, [0.9, 1, 1.18]),
+    // mâchoire et menton, en retrait sous le crâne
+    makePart(gJaw, M.skin, [0, 0.015, 0.076], undefined, [0.86, 0.76, 0.92]),
+    // casque : calotte serrée + pointe aéro à l'arrière
+    makePart(gHelmet, M.helmet, [0, 0.056, 0.036], [-0.3, 0, 0], [1.02, 0.96, 1.1]),
+    makePart(gHelmetTail, M.helmet, [0, 0.066, -0.024], [-1.15, 0, 0], [0.84, 1.55, 0.72]),
+    // aérations creusées dans la calotte
+    makePart(gVent, M.dark, [0, 0.114, 0.046]),
+    makePart(gVent, M.dark, [-0.043, 0.105, 0.034], [0, 0, 0.2]),
+    makePart(gVent, M.dark, [0.043, 0.105, 0.034], [0, 0, -0.2]),
+    // sangles sous les oreilles
+    makePart(gStrap, M.dark, [0, 0.038, 0.036], [0, 0, 0], [1, 1, 0.55]),
+    // lunettes enveloppantes
+    makePart(gGlasses, M.glasses, [0, 0.046, 0.044], [0.12, 0, 0], [1.05, 1, 1.1])
+  ];
+  // barbe : enveloppe la mâchoire, plus large et plus basse en version pleine
+  if (a.beard === 'courte') {
+    headParts.push(makePart(gBeard, M.beard, [0, -0.008, 0.082], undefined, [0.82, 0.62, 0.72]));
+  } else if (a.beard === 'pleine') {
+    headParts.push(makePart(gBeard, M.beard, [0, -0.014, 0.08], undefined, [1.02, 0.92, 0.92]));
+  }
+  const headMesh = mergeParts(headParts, owned)!;
   neck.add(headMesh);
 
   /*
@@ -679,13 +689,15 @@ export function buildRider(a: RiderAppearance, options: RiderOptions = {}): Ride
     shoulder.position.set(dx, 0.44, 0.05);
     torsoPivot.add(shoulder);
     // manche de maillot puis biceps nu : la coupure se voit, c'est ce qui fait vrai
-    const upper = mergeParts(
-      [
-        makePart(gUpperArm, jerseyPlain, [0, -0.085, 0], undefined, [1.05, 0.55, 1.05]),
-        makePart(gUpperArm, M.skin, [0, -0.185, 0], undefined, [0.92, 0.6, 0.92])
-      ],
-      owned
-    )!;
+    const upperParts: Part[] = [
+      makePart(gUpperArm, jerseyPlain, [0, -0.085, 0], undefined, [1.05, 0.55, 1.05]),
+      makePart(gUpperArm, M.skin, [0, -0.185, 0], undefined, [0.92, 0.6, 0.92])
+    ];
+    // brassard façon tatouage, posé sur le biceps nu
+    if (a.tattoo) {
+      upperParts.push(makePart(gTattoo, M.tattoo, [0, -0.2, 0], [Math.PI / 2, 0, 0]));
+    }
+    const upper = mergeParts(upperParts, owned)!;
     /*
      * Deltoïde. Sans lui, le bras sort du buste par une arête franche : le
      * raccord épaule-torse est ce qui trahit le plus un personnage assemblé

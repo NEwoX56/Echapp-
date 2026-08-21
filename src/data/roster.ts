@@ -1,5 +1,5 @@
 import type { RosterRider } from './types';
-import type { RiderAppearance, JerseyPattern, WheelStyle } from './appearance';
+import type { RiderAppearance, JerseyPattern, WheelStyle, BeardStyle } from './appearance';
 
 interface Look {
   skin: number;
@@ -26,7 +26,27 @@ function look(team: string, l: Look): RiderAppearance {
   };
 }
 
-export const ROSTER: RosterRider[] = [
+/**
+ * Variété visuelle du peloton : barbe et, pour certains, un brassard tatoué
+ * assorti à la couleur secondaire de leur équipe. Tirage déterministe à
+ * partir de l'identifiant du coureur, pour que chacun garde toujours la
+ * même allure d'une course à l'autre.
+ */
+function decorerBarbes(riders: RosterRider[]): RosterRider[] {
+  const barbes: BeardStyle[] = ['aucune', 'aucune', 'courte', 'pleine'];
+  for (const r of riders) {
+    let h = 0;
+    for (let i = 0; i < r.id.length; i++) h = (h * 31 + r.id.charCodeAt(i)) >>> 0;
+    r.appearance.beard = barbes[h % barbes.length];
+    if (h % 5 === 0) {
+      r.appearance.tattoo = true;
+      r.appearance.tattooColor = r.appearance.jerseySecondary;
+    }
+  }
+  return riders;
+}
+
+const ROSTER_BASE: RosterRider[] = [
   {
     id: 'falaise',
     name: 'Rémi Falaise',
@@ -198,3 +218,5 @@ export const ROSTER: RosterRider[] = [
     appearance: look('SAKURA', { skin: 0xe8c39e, p: 0xad1457, s: 0xf4f4f0, pat: 'bande-verticale', frame: 0x3d0f28 })
   }
 ];
+
+export const ROSTER: RosterRider[] = decorerBarbes(ROSTER_BASE);

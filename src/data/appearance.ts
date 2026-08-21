@@ -12,6 +12,8 @@ export type JerseyPattern =
 
 export type WheelStyle = 'classique' | 'profil' | 'pleine';
 
+export type BeardStyle = 'aucune' | 'courte' | 'pleine';
+
 export interface RiderAppearance {
   skin: number;
   jerseyPrimary: number;
@@ -25,6 +27,13 @@ export interface RiderAppearance {
   wheels: WheelStyle;
   /** numéro de dossard imprimé dans le bas du dos */
   dossard?: number;
+  /** couleur des cheveux et de la barbe. Par défaut brun foncé si absent */
+  hairColor?: number;
+  /** style de barbe. Par défaut 'aucune' si absent */
+  beard?: BeardStyle;
+  /** brassard façon tatouage sur le bras. Par défaut absent */
+  tattoo?: boolean;
+  tattooColor?: number;
 }
 
 /** Maillots distinctifs : appliqués par-dessus l'apparence du coureur. */
@@ -60,6 +69,22 @@ export const PATTERNS: { id: JerseyPattern; label: string }[] = [
   { id: 'damier', label: 'Damier' },
   { id: 'diagonale', label: 'Diagonale' },
   { id: 'pois', label: 'Pois' }
+];
+
+export const HAIR_COLORS: { id: string; label: string; value: number }[] = [
+  { id: 'noir', label: 'Noir', value: 0x1c1712 },
+  { id: 'brun', label: 'Brun', value: 0x3d2817 },
+  { id: 'chatain', label: 'Châtain', value: 0x6b4423 },
+  { id: 'blond', label: 'Blond', value: 0xc9a563 },
+  { id: 'roux', label: 'Roux', value: 0x8a3f22 },
+  { id: 'gris', label: 'Gris', value: 0x8a8a8a },
+  { id: 'blanc', label: 'Blanc', value: 0xe8e4dc }
+];
+
+export const BEARD_STYLES: { id: BeardStyle; label: string }[] = [
+  { id: 'aucune', label: 'Aucune' },
+  { id: 'courte', label: 'Courte' },
+  { id: 'pleine', label: 'Pleine' }
 ];
 
 export const WHEEL_STYLES: { id: WheelStyle; label: string }[] = [

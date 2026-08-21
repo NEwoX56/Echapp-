@@ -158,6 +158,8 @@ export class Decor {
   private buildings: BuildingKit | null;
   private scenery: SceneryAssets | null;
   private readonly med: boolean;
+  /** -1/1 = côté mer de la route (même tirage que Track), 0 = étape sans mer */
+  private readonly coteMer: number;
 
   constructor(
     piste: PisteDecor,
@@ -170,6 +172,8 @@ export class Decor {
     this.piste = piste;
     this.q = q;
     this.med = stage.biome === 'mediterraneen';
+    // même formule que Track.ts : les deux doivent tomber d'accord sur le côté
+    this.coteMer = stage.mer ? (stage.seed % 2 === 0 ? -1 : 1) : 0;
     this.buildings = buildings?.available ? buildings : null;
     this.scenery = scenery?.hasAny ? scenery : null;
     this.zones = decouperZones(stage, rand);
@@ -712,8 +716,11 @@ export class Decor {
     const rochers: Placement[] = [];
     const glbRochers = new Map<SceneryPiece, Placement[]>();
     const pas = 16 / Math.max(0.35, this.q.densiteDecor);
+    // quand une vraie mer borde la route, les palmiers restent du côté terre :
+    // sur le côté mer ils finiraient les pieds dans l'eau, la vue doit rester dégagée
+    const cotesPalmiers = this.coteMer !== 0 ? [-this.coteMer] : [-1, 1];
     for (let x = z.from; x < z.to; x += pas) {
-      for (const side of [-1, 1]) {
+      for (const side of cotesPalmiers) {
         if (rand() > 0.5) continue;
         const lat = side * (13 + rand() * 14);
         const y = this.piste.groundAt(x, lat);

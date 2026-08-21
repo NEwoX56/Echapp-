@@ -24,7 +24,7 @@ import { DirectorRadio, type RadioMessage, type RivalInfo } from './DirectorRadi
 import type { AudioEngine } from '../audio/AudioEngine';
 import type { Ambiance } from '../audio/Music';
 import type { MusicDirector } from '../audio/MusicDirector';
-import { atmosphereDe, brumeFinale } from './Atmosphere';
+import { atmosphereDeEtape, brumeFinale } from './Atmosphere';
 import { Rain } from './Rain';
 
 export interface RaceHudState {
@@ -241,7 +241,11 @@ export class Race {
     this.gc = gc;
     this.audio = audio.engine;
     this.music = audio.music;
-    this.audio.demarrerAmbiance(stage.meteo === 'pluie');
+    // calculée une fois ici : la météo est parfois tirée au sort (voir
+    // atmosphereDeEtape), il faut la même valeur pour le son d'ambiance,
+    // la brume et la pluie visuelle plus bas
+    const atmo = atmosphereDeEtape(stage);
+    this.audio.demarrerAmbiance(atmo.pluie);
     this.playerTeam = playerCfg.team;
     this.playerJerseys = playerCfg.jerseys;
     this.porteurJaune = jerseys.general;
@@ -263,7 +267,6 @@ export class Race {
     // ambiance : panorama photographique si disponible, dégradé uni sinon
     const mountain = stage.type === 'montagne';
     this.sky = assets.sky;
-    const atmo = atmosphereDe(stage.periode, stage.meteo);
     this.sunOffset.set(...atmo.soleilPos);
     const fogHex = brumeFinale(this.sky.fogColor(stage.type), atmo);
     const cielOk = quality.cielTexture && this.sky.apply(this.scene, stage.type, quality.environnement);
@@ -967,7 +970,7 @@ export class Race {
     this.camLook.lerp(regard, 0.18);
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.camLook);
-    this.track.updateDistant(this.tmp);
+    this.track.updateDistant(this.tmp, this.tan);
     this.sun.target.position.copy(this.tmp);
     this.sun.target.updateMatrixWorld();
     this.sun.position.set(this.tmp.x + this.sunOffset.x, this.tmp.y + this.sunOffset.y, this.tmp.z + this.sunOffset.z);
@@ -1142,7 +1145,7 @@ export class Race {
       }
       this.camera.position.copy(this.camPos);
       this.camera.lookAt(this.camLook);
-      this.track.updateDistant(this.tmp);
+      this.track.updateDistant(this.tmp, this.tan);
       this.sun.target.position.copy(this.tmp);
       this.sun.target.updateMatrixWorld();
       this.sun.position.set(this.tmp.x + this.sunOffset.x, this.tmp.y + this.sunOffset.y, this.tmp.z + this.sunOffset.z);
@@ -1179,7 +1182,7 @@ export class Race {
       this.camLook.lerp(regard, Math.min(1, dt * 5));
       this.camera.position.copy(this.camPos);
       this.camera.lookAt(this.camLook);
-      this.track.updateDistant(this.tmp);
+      this.track.updateDistant(this.tmp, this.tan);
       this.sun.target.position.copy(this.tmp);
       this.sun.target.updateMatrixWorld();
       this.sun.position.set(this.tmp.x + this.sunOffset.x, this.tmp.y + this.sunOffset.y, this.tmp.z + this.sunOffset.z);
@@ -1265,7 +1268,7 @@ export class Race {
     }
 
     // les sommets lointains suivent le coureur : sans cela il les traverserait
-    this.track.updateDistant(this.tmp);
+    this.track.updateDistant(this.tmp, this.tan);
 
     // recentrer la zone d'ombre sur le coureur
     this.sun.target.position.copy(this.tmp);

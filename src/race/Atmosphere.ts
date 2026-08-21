@@ -1,4 +1,4 @@
-import type { Periode, Meteo } from '../data/types';
+import type { Periode, Meteo, StageDef } from '../data/types';
 
 /**
  * Lumière et brume selon l'heure et la météo de l'étape.
@@ -122,4 +122,40 @@ export function blend(a: number, b: number, t: number): number {
   const g = Math.round(ag + (bg - ag) * t);
   const bl = Math.round(ab + (bb - ab) * t);
   return (r << 16) | (g << 8) | bl;
+}
+
+/** petit générateur déterministe, indépendant de celui utilisé pour le reste du parcours */
+function seededRand(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Réglages d'atmosphère d'une étape. Sur les quelques étapes où l'heure ou la
+ * météo sont écrites dans les données (flavor text assorti, ex. « Grand
+ * départ à l'aube »), on les respecte telles quelles. Partout ailleurs, un
+ * tirage déterministe (à partir de la graine de l'étape, donc toujours le
+ * même pour une étape donnée) en choisit une : sans ça, l'écrasante majorité
+ * des étapes tombait sur le réglage par défaut « jour, sec » et la météo
+ * n'existait presque jamais en pratique, même si le système marchait.
+ */
+export function atmosphereDeEtape(stage: StageDef): ReglagesAtmosphere {
+  const rand = seededRand(stage.seed + 4001);
+
+  let periode = stage.periode;
+  if (!periode) {
+    const t = rand();
+    periode = t < 0.42 ? 'jour' : t < 0.6 ? 'aube' : t < 0.78 ? 'crepuscule' : 'nuit';
+  }
+  let meteo = stage.meteo;
+  if (!meteo) {
+    meteo = rand() < 0.3 ? 'pluie' : 'sec';
+  }
+  return atmosphereDe(periode, meteo);
 }

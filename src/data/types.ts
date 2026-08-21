@@ -64,6 +64,8 @@ export interface StageDef {
   vent?: VentDef[];
   /** région : recolore terrain et bâtiments. Par défaut 'tempere' si absent */
   biome?: Biome;
+  /** vrai si l'étape longe une vraie côte : une mer visible borde la route */
+  mer?: boolean;
 }
 
 export interface TourDef {

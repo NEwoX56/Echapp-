@@ -101,7 +101,8 @@ export const TOURS: TourDef[] = [
         profile: [[0, 3], [0.3, 6], [0.6, 4], [0.9, 7], [1, 3]],
         periode: 'aube',
         description: 'Grand départ à l\'aube, bord de mer plat et venteux. Peloton nerveux.',
-        sprints: [{ at: 0.5, name: 'Sprint de Kerantec' }]
+        sprints: [{ at: 0.5, name: 'Sprint de Kerantec' }],
+        mer: true
       },
       {
         id: 'lit-2',
@@ -121,7 +122,8 @@ export const TOURS: TourDef[] = [
           { at: 0.64, name: 'Côte du Phare', category: 2 },
           { at: 0.88, name: 'Falaise Noire', category: 3 }
         ],
-        sprints: [{ at: 0.5, name: 'Sprint des Falaises' }]
+        sprints: [{ at: 0.5, name: 'Sprint des Falaises' }],
+        mer: true
       },
       {
         id: 'lit-3',
@@ -181,7 +183,8 @@ export const TOURS: TourDef[] = [
         description:
           "Parade finale puis sprint massif sur la promenade. Le front de mer, à découvert, met le peloton en bordures avant que ça ne se joue au sprint.",
         sprints: [{ at: 0.65, name: 'Sprint de Brumelac' }],
-        vent: [{ from: 0.28, to: 0.46, name: 'Front de mer de Brumelac' }]
+        vent: [{ from: 0.28, to: 0.46, name: 'Front de mer de Brumelac' }],
+        mer: true
       }
     ]
   },
@@ -228,12 +231,13 @@ export const TOURS: TourDef[] = [
           [0, 14], [0.15, 48], [0.28, 22], [0.42, 58], [0.55, 26],
           [0.7, 64], [0.82, 30], [0.93, 50], [1, 24]
         ],
-        description: 'Corniche sans répit. Les écarts se creusent déjà.',
+        description: 'Corniche sans répit, la mer en contrebas. Les écarts se creusent déjà.',
         climbs: [
           { at: 0.42, name: 'Côte d\'Altis', category: 2 },
           { at: 0.7, name: 'Corniche Haute', category: 1 }
         ],
-        sprints: [{ at: 0.55, name: 'Sprint d\'Altis' }]
+        sprints: [{ at: 0.55, name: 'Sprint d\'Altis' }],
+        mer: true
       },
       {
         id: 'tra-4',
@@ -414,7 +418,8 @@ export const TOURS: TourDef[] = [
           { at: 0.5, name: 'Côte du Phare', category: 3 },
           { at: 0.82, name: 'Falaise Noire', category: 3 }
         ],
-        sprints: [{ at: 0.66, name: 'Sprint de la Corniche' }]
+        sprints: [{ at: 0.66, name: 'Sprint de la Corniche' }],
+        mer: true
       },
       {
         id: 'cou-7',
@@ -557,7 +562,8 @@ export const TOURS: TourDef[] = [
         description:
           "Dernière étape le long de la baie. La corniche à découvert peut scinder le peloton avant l'arrivée, où le vainqueur du Tour du Midi lève les bras.",
         sprints: [{ at: 0.6, name: 'Sprint de la Baie' }],
-        vent: [{ from: 0.3, to: 0.48, name: 'Corniche de la Baie' }]
+        vent: [{ from: 0.3, to: 0.48, name: 'Corniche de la Baie' }],
+        mer: true
       }
     ]
   }

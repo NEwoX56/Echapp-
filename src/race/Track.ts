@@ -62,6 +62,18 @@ export class Track {
   readonly sprints: SprintMarker[] = [];
   readonly paveZones: PaveMarker[] = [];
   readonly ventZones: VentMarker[] = [];
+  /**
+   * Étapes de montagne : un côté de la route est un vide, l'autre une paroi.
+   * -1 = le vide est à gauche, 1 = à droite, 0 = pas d'étape de montagne
+   * (relief symétrique classique).
+   */
+  private coteVide = 0;
+  /** étapes littorales : -1/1 = côté où la mer borde la route, 0 = pas de mer */
+  private coteMer = 0;
+  /** altitude monde absolue du niveau de la mer, quand coteMer != 0 */
+  private seaLevel = 0;
+  /** grand arrière-plan d'horizon, toujours visible côté mer quel que soit le virage */
+  private merHorizon: THREE.Mesh | null = null;
   /** chaîne de sommets lointains : suit le coureur comme un décor de fond */
   private distantRange: THREE.Mesh | null = null;
 
@@ -102,6 +114,13 @@ export class Track {
         shadows: true
       } as QualitySettings);
     this.densiteFoule = THREE.MathUtils.clamp(this.q.densiteFoule ?? 1, 0.1, 1);
+    // le vide change de côté d'une étape de montagne à l'autre, sans consommer
+    // le tirage déterministe des autres éléments du parcours
+    this.coteVide = stage.type === 'montagne' ? (stage.seed % 2 === 0 ? 1 : -1) : 0;
+    this.coteMer = stage.mer ? (stage.seed % 2 === 0 ? -1 : 1) : 0;
+    if (this.coteMer !== 0) {
+      this.seaLevel = Math.min(...stage.profile.map((p) => p[1])) - 3;
+    }
     const rand = mulberry32(stage.seed);
 
     const nPts = 40;
@@ -109,9 +128,13 @@ export class Track {
     const pts: THREE.Vector3[] = [];
     let x = 0;
     let heading = 0;
+    // une route littorale épouse la côte : plus sinueuse, pour que la mer
+    // entre régulièrement dans le champ de la caméra au lieu de rester hors
+    // cadre sur les longues lignes droites
+    const sinuosite = this.coteMer !== 0 ? 1.7 : 1;
     for (let i = 0; i <= nPts; i++) {
       const t = i / nPts;
-      heading += (rand() - 0.5) * 0.55;
+      heading += (rand() - 0.5) * 0.55 * sinuosite;
       heading *= 0.82;
       x += Math.sin(heading) * segLen * 0.55;
       pts.push(new THREE.Vector3(x, this.altitudeAtFraction(t), i * segLen));
@@ -129,7 +152,9 @@ export class Track {
     }
 
     this.buildRoad();
+    this.buildGuardrail();
     this.buildTerrain(stage.seed);
+    this.buildSeaHorizon();
     this.buildDistantRange(stage.seed);
     /*
      * Le décor traversé : villages, villes, forêts, rivières et monuments.
@@ -297,6 +322,111 @@ export class Track {
         })
       )
     );
+  }
+
+  /**
+   * Balises basses le long du versant vide, en montagne : sans ce liseré au
+   * bord de la route, le vide qu'on vient de creuser dans le terrain ne se
+   * remarque même pas — l'œil a besoin d'un repère net au ras de la chaussée
+   * pour comprendre qu'il n'y a plus rien juste après.
+   */
+  private buildGuardrail(): void {
+    if (this.coteVide === 0) return;
+    const pas = 15;
+    const n = Math.max(1, Math.floor(this.length / pas));
+    const postGeo = new THREE.CylinderGeometry(0.045, 0.06, 0.8, 6);
+    const postMat = new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: 0.65 });
+    const capGeo = new THREE.BoxGeometry(0.1, 0.13, 0.03);
+    const capMat = new THREE.MeshStandardMaterial({
+      color: 0xd6382c,
+      roughness: 0.5,
+      emissive: 0x3a0c08,
+      emissiveIntensity: 0.4
+    });
+    const posts = new THREE.InstancedMesh(postGeo, postMat, n);
+    const caps = new THREE.InstancedMesh(capGeo, capMat, n);
+    const m = new THREE.Matrix4();
+    const p = new THREE.Vector3();
+    const lat = this.coteVide * (ROAD_WIDTH / 2 + 1.05);
+    for (let i = 0; i < n; i++) {
+      const dist = i * pas + pas * 0.5;
+      this.pose(dist, lat, p);
+      m.compose(new THREE.Vector3(p.x, p.y + 0.4, p.z), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1));
+      posts.setMatrixAt(i, m);
+      m.compose(new THREE.Vector3(p.x, p.y + 0.75, p.z), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1));
+      caps.setMatrixAt(i, m);
+    }
+    posts.instanceMatrix.needsUpdate = true;
+    caps.instanceMatrix.needsUpdate = true;
+    this.group.add(posts, caps);
+    this.disposables.push(postGeo, postMat, capGeo, capMat);
+  }
+
+  /**
+   * Horizon de mer : un large éventail toujours centré sur le coureur, comme
+   * la chaîne de sommets lointains. Le terrain lui-même se colore en eau côté
+   * mer jusqu'à sa limite (voir buildTerrain, maxLat=520) ; cet éventail
+   * prend le relais au-delà, pour que l'horizon reste bleu jusqu'au ciel.
+   */
+  private buildSeaHorizon(): void {
+    if (this.coteMer === 0) return;
+    /*
+     * L'angle est construit en repère local, centré sur le côté mer
+     * (perpendiculaire au cap du moment) : la rotation qui recale ce repère
+     * sur le cap RÉEL du coureur est appliquée image par image dans
+     * updateDistant, pas figée ici. Sans ça, sur une route qui tourne
+     * beaucoup, l'horizon fixé au cap de départ finit par pointer n'importe
+     * où après quelques virages.
+     */
+    const theta0 = this.coteMer * (Math.PI / 2);
+    const demiAngle = (100 * Math.PI) / 180;
+    // prend le relais juste après la limite du terrain (maxLat=520 dans buildTerrain)
+    const anneaux = [500, 650, 850, 1100];
+    const segs = 28;
+    const positions: number[] = [];
+    const colors: number[] = [];
+    const indices: number[] = [];
+    const clair = new THREE.Color(0x3fa0b8);
+    const profond = new THREE.Color(0x123a52);
+    const c = new THREE.Color();
+    const y = this.seaLevel - 0.1;
+    for (let ri = 0; ri < anneaux.length; ri++) {
+      const r = anneaux[ri];
+      c.copy(clair).lerp(profond, ri / (anneaux.length - 1));
+      for (let s = 0; s <= segs; s++) {
+        const a = theta0 - demiAngle + (s / segs) * demiAngle * 2;
+        positions.push(Math.sin(a) * r, y, Math.cos(a) * r);
+        colors.push(c.r, c.g, c.b);
+      }
+    }
+    const stride = segs + 1;
+    for (let ri = 0; ri < anneaux.length - 1; ri++) {
+      for (let s = 0; s < segs; s++) {
+        const a0 = ri * stride + s;
+        const a1 = a0 + 1;
+        const b0 = a0 + stride;
+        const b1 = b0 + 1;
+        indices.push(a0, b0, a1, a1, b0, b1);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    g.setIndex(indices);
+    g.computeVertexNormals();
+    const mat = new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      side: THREE.DoubleSide,
+      fog: true,
+      transparent: true,
+      opacity: 0.92
+    });
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.renderOrder = -1;
+    mesh.frustumCulled = false;
+    this.merHorizon = mesh;
+    this.group.add(mesh);
+    this.disposables.push(g, mat);
   }
 
   /** palette régionale : deux ambiances de terrain, tempérée ou méditerranéenne */
@@ -512,21 +642,46 @@ export class Track {
 
     if (a <= FLAT_TO) return TRENCH;
 
+    // raccord doux entre la zone creusée et le relief, commun aux deux formules
+    if (a < RISE_FROM) {
+      const k = (a - FLAT_TO) / (RISE_FROM - FLAT_TO);
+      const smooth = k * k * (3 - 2 * k);
+      return TRENCH * (1 - smooth);
+    }
+
+    /*
+     * Versant du vide, en montagne : la route longe une falaise plutôt que de
+     * remonter symétriquement des deux côtés. Sans ce plongeon, un col n'a
+     * jamais l'air d'un vrai col — juste d'une vallée verte des deux côtés.
+     */
+    if (this.coteVide !== 0 && Math.sign(lat) === this.coteVide) {
+      const far = Math.min(1, (a - RISE_FROM) / 150);
+      const plancher = fbm(dist * 0.0016, a * 0.003, seed + 91) * 22;
+      return -(30 + far * (170 + plancher));
+    }
+
+    /*
+     * Versant de la mer : le terrain s'aplatit vers le niveau de la mer
+     * (constant, absolu) plutôt que de suivre le relief habituel — sans quoi
+     * la plaque d'eau posée plus loin flotterait au-dessus d'une colline ou
+     * s'enfoncerait dedans selon l'altitude du profil à cet endroit.
+     */
+    if (this.coteMer !== 0 && Math.sign(lat) === this.coteMer) {
+      const flatten = Math.min(1, (a - RISE_FROM) / 18);
+      const dune = fbm(dist * 0.006, a * 0.01, seed + 53) * 2.3 * (1 - flatten);
+      const cible = this.seaLevel - this.altitudeAtFraction(dist / this.length);
+      return cible + dune;
+    }
+
     const s = this.reliefScale();
     const base = fbm(dist * 0.0022, lat * 0.0035, seed) * 26 * s;
     const far = Math.min(1, (a - RISE_FROM) / 340);
     const ridges = Math.abs(fbm(dist * 0.0009, lat * 0.0016, seed + 31)) * 190 * s * far;
     const local = fbm(dist * 0.012, lat * 0.02, seed + 77) * 2.4;
     const ramp = Math.min(1, Math.max(0, (a - RISE_FROM) / 90));
-    const relief = ramp * (base + ridges + local * ramp);
-
-    // raccord doux entre la zone creusée et le relief
-    if (a < RISE_FROM) {
-      const k = (a - FLAT_TO) / (RISE_FROM - FLAT_TO);
-      const smooth = k * k * (3 - 2 * k);
-      return TRENCH * (1 - smooth);
-    }
-    return relief;
+    // paroi plus marquée côté montagne quand l'autre versant est un vide
+    const boost = this.coteVide !== 0 ? 1.25 : 1;
+    return ramp * (base + ridges * boost + local * ramp);
   }
 
   /**
@@ -619,6 +774,9 @@ export class Track {
     const grass = new THREE.Color(palette.herbe);
     const snow = new THREE.Color(0xdfe6ee);
     const dry = new THREE.Color(palette.seche);
+    const sable = new THREE.Color(0xd9c48f);
+    const eauClaire = new THREE.Color(0x4aa8bf);
+    const eauProfonde = new THREE.Color(0x14415c);
     const c = new THREE.Color();
 
     // le terrain accompagne la route jusque dans le dégagement d'arrivée
@@ -639,13 +797,22 @@ export class Track {
 
         // coloration par altitude relative
         const altAbs = y;
-        if (rel < 1.5) c.copy(grass);
-        else if (rel < 30) c.copy(grass).lerp(dry, Math.min(1, rel / 30));
-        else if (rel < 95) c.copy(dry).lerp(rock, Math.min(1, (rel - 30) / 65));
-        else c.copy(rock);
-        // neige sur les sommets des étapes de montagne
-        if (this.stage.type === 'montagne' && altAbs > 190) {
-          c.lerp(snow, Math.min(1, (altAbs - 190) / 90));
+        const merIci = this.coteMer !== 0 && Math.sign(lat) === this.coteMer && Math.abs(lat) > 20;
+        if (merIci) {
+          // plage puis mer : le maillage du terrain EST l'eau ici, sans
+          // nappe séparée qui flotterait ou se ferait recouvrir par lui
+          const flatten = Math.min(1, (Math.abs(lat) - 20) / 18);
+          c.copy(sable).lerp(eauClaire, Math.min(1, flatten * 1.6));
+          if (flatten > 0.6) c.lerp(eauProfonde, (flatten - 0.6) / 0.4);
+        } else {
+          if (rel < 1.5) c.copy(grass);
+          else if (rel < 30) c.copy(grass).lerp(dry, Math.min(1, rel / 30));
+          else if (rel < 95) c.copy(dry).lerp(rock, Math.min(1, (rel - 30) / 65));
+          else c.copy(rock);
+          // neige sur les sommets des étapes de montagne
+          if (this.stage.type === 'montagne' && altAbs > 190) {
+            c.lerp(snow, Math.min(1, (altAbs - 190) / 90));
+          }
         }
         // variation locale
         const n = fbm(dist * 0.03, lat * 0.05, seed + 5) * 0.06;
@@ -761,9 +928,14 @@ export class Track {
   }
 
   /** recentre les sommets lointains sur le coureur (décor de fond) */
-  updateDistant(playerPos: THREE.Vector3): void {
-    if (!this.distantRange) return;
-    this.distantRange.position.set(playerPos.x, 0, playerPos.z);
+  updateDistant(playerPos: THREE.Vector3, tangent?: THREE.Vector3): void {
+    if (this.distantRange) this.distantRange.position.set(playerPos.x, 0, playerPos.z);
+    if (this.merHorizon) {
+      this.merHorizon.position.set(playerPos.x, 0, playerPos.z);
+      // tourne avec le cap du moment : sur une route sinueuse, l'horizon de
+      // mer doit rester du même côté relatif que la route qu'on longe
+      if (tangent) this.merHorizon.rotation.y = Math.atan2(tangent.x, tangent.z);
+    }
   }
 
   /* ------------------------------------------------------------ */

@@ -19,6 +19,8 @@ export interface RadioContext {
   nextVent: { name: string; inMeters: number } | null;
   /** secteur de vent en cours, si le joueur y est */
   bordures: { abrite: boolean } | null;
+  /** crevaison en cours ou relance juste après le changement de roue */
+  crevaison: { relance: boolean } | null;
   /** maillots portés par le joueur */
   jerseys: ClassementKey[];
   stageType: string;
@@ -239,6 +241,22 @@ export class DirectorRadio {
         });
       }
     }
+    /* --- crevaison --- */
+    if (c.crevaison && !c.crevaison.relance && this.once('crevaison-active')) {
+      out.push({
+        text: "Tu as crevé ! Le peloton continue devant, il faut changer la roue vite.",
+        tone: 'alerte',
+        priority: 93
+      });
+    }
+    if (c.crevaison && c.crevaison.relance && this.once('crevaison-relance')) {
+      out.push({
+        text: 'La roue est changée. Fonce, il faut revenir avant que l\'écart ne se creuse.',
+        tone: 'tactique',
+        priority: 89
+      });
+    }
+
     if (c.bordures && !c.bordures.abrite && this.once('bordures-dehors')) {
       out.push({
         text: "Tu es resté dans le vent, sans personne pour t'abriter. Il va falloir revenir dans le groupe de tête.",

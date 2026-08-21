@@ -16,6 +16,7 @@ export class HUD {
     boost: HTMLElement;
     bonk: HTMLElement;
     danseuse: HTMLElement;
+    crevaison: HTMLElement;
     bidons: HTMLElement;
     gels: HTMLElement;
     marker: HTMLElement;
@@ -163,6 +164,7 @@ export class HUD {
               <span class="badge badge-boost hidden" id="hud-boost">Boost</span>
               <span class="badge badge-bonk hidden" id="hud-bonk">Fringale</span>
               <span class="badge badge-danseuse hidden" id="hud-danseuse">Danseuse</span>
+              <span class="badge badge-crevaison hidden" id="hud-crevaison">Crevaison</span>
             </div>
             <div class="hud-supplies">
               <span class="supply"><b id="hud-bidons">4</b> bidon(s) <kbd id="hud-key-bidon">B</kbd></span>
@@ -192,6 +194,7 @@ export class HUD {
       boost: g('hud-boost'),
       bonk: g('hud-bonk'),
       danseuse: g('hud-danseuse'),
+      crevaison: g('hud-crevaison'),
       marker: g('hud-marker'),
       tvGroupes: g('tv-groupes'),
       tvLogo: g('tv-logo'),
@@ -225,6 +228,7 @@ export class HUD {
     e.boost.classList.toggle('hidden', s.boost <= 0);
     e.bonk.classList.toggle('hidden', s.energy > 0.5);
     e.danseuse.classList.toggle('hidden', !s.standing);
+    e.crevaison.classList.toggle('hidden', !s.crevaison);
 
     this.majBandeau(s.groupes);
     // les jauges disparaissent pendant la célébration d'arrivée

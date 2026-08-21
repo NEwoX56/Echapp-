@@ -448,6 +448,7 @@ button { font-family: inherit; cursor: pointer; }
 /* ============ v3 : atelier, classements, maillots ============ */
 
 .badge-danseuse { background: rgba(232,163,61,0.25); color: #ffc978; border: 1px solid #e8a33d; }
+.badge-crevaison { background: #d6382c; color: #fff; animation: pulse 0.9s infinite; }
 
 /* prochain point chaud */
 .hud-marker {

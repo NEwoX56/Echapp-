@@ -43,6 +43,12 @@ export class Rider {
   bonking = false;
   /** dans les bordures : à l'abri (groupe de tête) ou laissé dans le vent */
   abrite = true;
+  /** temps restant de crevaison, en secondes (0 = pas de crevaison en cours) */
+  crevaisonTimer = 0;
+  /** fenêtre de relance après le changement de roue : on pousse plus fort pour revenir */
+  relanceTimer = 0;
+  /** une crevaison a déjà eu lieu cette étape (au plus une) */
+  crevaisonSubie = false;
   /**
    * Réserve maximale. Le joueur reste à 100 ; les adversaires peuvent monter
    * au-delà dans les paliers de difficulté élevés, ce qui leur permet de
@@ -140,6 +146,20 @@ export class Rider {
     if (this.boostTimer > 0) {
       target *= 1.28;
       this.boostTimer -= dt;
+    }
+    // crevaison : roue à plat, on roule sur la jante en attendant le vélo de secours
+    if (this.crevaisonTimer > 0) {
+      target *= 0.28;
+      this.drafting = false;
+      this.crevaisonTimer -= dt;
+      if (this.crevaisonTimer <= 0) {
+        this.crevaisonTimer = 0;
+        this.relanceTimer = 7;
+      }
+    } else if (this.relanceTimer > 0) {
+      // relance après le changement de roue : on met tout pour revenir
+      target *= 1.16;
+      this.relanceTimer -= dt;
     }
 
     this.speed += (target - this.speed) * Math.min(1, dt * 1.6);

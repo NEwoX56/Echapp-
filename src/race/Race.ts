@@ -44,6 +44,8 @@ export interface RaceHudState {
   bidons: number;
   gels: number;
   standing: boolean;
+  /** roue à plat en cours */
+  crevaison: boolean;
   /** prochain point chaud : col ou sprint */
   nextMarker: { kind: 'col' | 'sprint' | 'pave' | 'vent'; name: string; inMeters: number } | null;
   gapAhead: number | null;
@@ -144,6 +146,10 @@ export class Race {
   private passedClimbs = new Set<number>();
   /** secteur de vent de côté en cours, si le joueur y est */
   private ventZoneEnCours: VentMarker | null = null;
+  /** progression 0..1 à laquelle le joueur crève cette étape (-1 = pas de crevaison) */
+  private crevaisonJoueurAt = -1;
+  /** progression 0..1 à laquelle chaque adversaire tiré au sort crève */
+  private crevaisonBots = new Map<string, number>();
   private audio: AudioEngine;
   private music: MusicDirector;
   private ambiance: Ambiance = 'course';
@@ -353,6 +359,22 @@ export class Race {
       const archetypes = new Map<string, import('../data/types').Archetype>();
       for (const r of roster) archetypes.set(r.id, r.archetype);
       this.tactics.setField(this.riders, archetypes);
+
+      /*
+       * Crevaisons : au plus une pour le joueur, tirée au sort une fois pour
+       * toutes au départ. Une ou deux dans le peloton, pour que la radio ait
+       * de quoi parler et que le classement ne soit jamais figé.
+       */
+      if (Math.random() < 0.14) {
+        this.crevaisonJoueurAt = 0.12 + Math.random() * 0.68;
+      }
+      const candidats = this.riders.filter((r) => r !== this.player);
+      const nbBots = Math.random() < 0.45 ? 1 : Math.random() < 0.8 ? 2 : 0;
+      for (let i = 0; i < nbBots && candidats.length; i++) {
+        const idx = Math.floor(Math.random() * candidats.length);
+        const r = candidats.splice(idx, 1)[0];
+        this.crevaisonBots.set(r.id, 0.1 + Math.random() * 0.75);
+      }
     } else {
       // contre-la-montre : adversaires en temps virtuels
       this.virtualTimes = roster.map((r) => {
@@ -456,6 +478,7 @@ export class Race {
 
     this.checkMarkers();
     this.majBordures();
+    this.majIncidents();
 
     // ravitaillement
     if (
@@ -702,6 +725,7 @@ export class Race {
       nextSprint,
       nextVent,
       bordures: this.ventZoneEnCours ? { abrite: p.abrite } : null,
+      crevaison: p.crevaisonTimer > 0 ? { relance: false } : p.relanceTimer > 0 ? { relance: true } : null,
       jerseys: this.playerJerseys,
       stageType: this.stage.type,
       course: {
@@ -794,6 +818,34 @@ export class Race {
     } else if (!zone && this.ventZoneEnCours) {
       this.ventZoneEnCours = null;
       for (const r of this.riders) r.abrite = true;
+    }
+  }
+
+  /**
+   * Incidents mécaniques : crevaisons tirées au sort au départ, déclenchées
+   * quand le coureur concerné atteint la progression fixée. Roue à plat,
+   * plus d'abri, puis une fenêtre de relance une fois la roue changée.
+   */
+  private majIncidents(): void {
+    if (this.stage.type === 'clm') return;
+    const p = this.player;
+    const progression = Math.min(1, p.dist / this.track.length);
+    if (this.crevaisonJoueurAt > 0 && !p.crevaisonSubie && progression >= this.crevaisonJoueurAt) {
+      p.crevaisonSubie = true;
+      p.crevaisonTimer = 5 + Math.random() * 2.5;
+      this.audio.derailleur();
+      this.onEvent('Crevaison ! Roue à changer.');
+    }
+    for (const [id, at] of this.crevaisonBots) {
+      const r = this.riders.find((x) => x.id === id);
+      if (!r || r.finished || r.crevaisonSubie) continue;
+      const rp = Math.min(1, r.dist / this.track.length);
+      if (rp >= at) {
+        r.crevaisonSubie = true;
+        r.crevaisonTimer = 5 + Math.random() * 2.5;
+        // annoncé seulement si le rival crève sous les yeux du joueur
+        if (Math.abs(r.dist - p.dist) < 40) this.onEvent(`${r.name} a crevé !`);
+      }
     }
   }
 
@@ -899,6 +951,7 @@ export class Race {
       bidons: p.bidons,
       gels: p.gels,
       standing: p.standing > 0.5,
+      crevaison: p.crevaisonTimer > 0,
       nextMarker,
       gapAhead: nearestAhead,
       gapBehind: nearestBehind,

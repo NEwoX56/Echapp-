@@ -33,7 +33,8 @@ export const TOURS: TourDef[] = [
           [0, 6], [0.14, 32], [0.26, 14], [0.4, 40], [0.54, 16],
           [0.68, 46], [0.8, 22], [0.9, 38], [1, 12]
         ],
-        description: 'Succession de côtes. Terrain à puncheurs et baroudeurs.',
+        meteo: 'pluie',
+        description: 'Succession de côtes sous la pluie. Terrain à puncheurs et baroudeurs.',
         climbs: [
           { at: 0.4, name: 'Côte de Solmagne', category: 3 },
           { at: 0.68, name: 'Mur de Fayet', category: 2 }
@@ -96,7 +97,8 @@ export const TOURS: TourDef[] = [
         displayKm: 154,
         seed: 121,
         profile: [[0, 3], [0.3, 6], [0.6, 4], [0.9, 7], [1, 3]],
-        description: 'Bord de mer plat et venteux. Peloton nerveux.',
+        periode: 'aube',
+        description: 'Grand départ à l\'aube, bord de mer plat et venteux. Peloton nerveux.',
         sprints: [{ at: 0.5, name: 'Sprint de Kerantec' }]
       },
       {
@@ -110,7 +112,8 @@ export const TOURS: TourDef[] = [
           [0, 5], [0.12, 34], [0.24, 12], [0.38, 44], [0.5, 18],
           [0.64, 52], [0.76, 20], [0.88, 42], [1, 16]
         ],
-        description: 'Enchaînement de murs côtiers. Course de mouvement.',
+        meteo: 'pluie',
+        description: 'Enchaînement de murs côtiers sous la pluie. Course de mouvement.',
         climbs: [
           { at: 0.38, name: 'Mur d\'Argent', category: 3 },
           { at: 0.64, name: 'Côte du Phare', category: 2 },
@@ -230,7 +233,8 @@ export const TOURS: TourDef[] = [
           [0, 16], [0.16, 40], [0.32, 96], [0.44, 68],
           [0.6, 142], [0.72, 108], [0.88, 168], [1, 158]
         ],
-        description: 'Premier grand rendez-vous : trois cols en enfilade.',
+        periode: 'crepuscule',
+        description: 'Premier grand rendez-vous : trois cols en enfilade, arrivée au crépuscule.',
         climbs: [
           { at: 0.32, name: 'Col de Brume', category: 1 },
           { at: 0.6, name: 'Col de Nimbus', category: 0 },
@@ -312,7 +316,8 @@ export const TOURS: TourDef[] = [
         displayKm: 12,
         seed: 301,
         profile: [[0, 10], [0.5, 16], [1, 11]],
-        description: 'Douze kilomètres pour endosser le premier maillot jaune.'
+        periode: 'nuit',
+        description: 'Prologue nocturne sous les projecteurs. Douze kilomètres pour endosser le premier maillot jaune.'
       },
       {
         id: 'cou-2',
@@ -386,7 +391,8 @@ export const TOURS: TourDef[] = [
           [0, 14], [0.2, 46], [0.34, 24], [0.5, 54], [0.66, 26],
           [0.82, 48], [1, 20]
         ],
-        description: 'Étape de transition sur la côte. Vent de travers annoncé.',
+        meteo: 'pluie',
+        description: 'Étape de transition sur la côte, sous la pluie. Vent de travers annoncé.',
         climbs: [
           { at: 0.5, name: 'Côte du Phare', category: 3 },
           { at: 0.82, name: 'Falaise Noire', category: 3 }
@@ -437,7 +443,8 @@ export const TOURS: TourDef[] = [
         displayKm: 152,
         seed: 409,
         profile: [[0, 40], [0.25, 66], [0.5, 34], [0.75, 52], [1, 26]],
-        description: 'Dernière chance pour les baroudeurs avant l\'arrivée.',
+        periode: 'crepuscule',
+        description: 'Dernière chance pour les baroudeurs, dans la lumière du soir.',
         climbs: [{ at: 0.25, name: 'Côte d\'Altis', category: 3 }],
         sprints: [{ at: 0.6, name: 'Sprint d\'Altis' }]
       },

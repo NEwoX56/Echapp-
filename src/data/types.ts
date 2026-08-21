@@ -2,6 +2,12 @@ import type { RiderAppearance, ClassementKey } from './appearance';
 
 export type StageType = 'plaine' | 'vallonnee' | 'montagne' | 'clm';
 
+/** moment de la journée : influence la lumière, le ciel et la brume */
+export type Periode = 'jour' | 'aube' | 'crepuscule' | 'nuit';
+
+/** météo de l'étape : influence la lumière et déclenche la pluie */
+export type Meteo = 'sec' | 'pluie';
+
 /** col répertorié : donne des points au classement de la montagne */
 export interface ClimbDef {
   /** fraction 0..1 du parcours où se trouve le sommet */
@@ -31,6 +37,10 @@ export interface StageDef {
   description: string;
   climbs?: ClimbDef[];
   sprints?: SprintDef[];
+  /** par défaut 'jour' si absent */
+  periode?: Periode;
+  /** par défaut 'sec' si absent */
+  meteo?: Meteo;
 }
 
 export interface TourDef {

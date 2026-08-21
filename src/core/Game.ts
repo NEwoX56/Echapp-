@@ -29,6 +29,7 @@ import { HUD } from '../ui/HUD';
 import { Results } from '../ui/Results';
 import { getRoster } from '../data/rosterStore';
 import { toast } from '../ui/util';
+import { PostFX } from './PostFX';
 import type { StageDef } from '../data/types';
 
 type GameState = 'menu' | 'briefing' | 'race' | 'results';
@@ -67,6 +68,8 @@ export class Game {
   /** compteur d'échecs de rendu consécutifs, pour dégrader automatiquement */
   private renderFails = 0;
   private degraded = false;
+  /** bloom + vignette, seulement en qualité élevée (voir Quality.ts) */
+  private postfx: PostFX | null = null;
 
   /** applique les réglages de qualité au renderer */
   private applyQuality(): void {
@@ -82,6 +85,16 @@ export class Game {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    if (q.postProcessing && !this.postfx) {
+      try {
+        this.postfx = new PostFX(this.renderer, window.innerWidth, window.innerHeight);
+      } catch {
+        this.postfx = null; // composer indisponible sur cette plateforme : rendu direct
+      }
+    } else if (!q.postProcessing && this.postfx) {
+      this.postfx.dispose();
+      this.postfx = null;
+    }
     this.resize();
   }
 
@@ -395,7 +408,8 @@ export class Game {
   private safeRender(): void {
     if (!this.race) return;
     try {
-      this.renderer.render(this.race.scene, this.race.camera);
+      if (this.postfx) this.postfx.render(this.race.scene, this.race.camera);
+      else this.renderer.render(this.race.scene, this.race.camera);
       this.renderFails = 0;
     } catch (err) {
       this.renderFails += 1;
@@ -405,6 +419,10 @@ export class Game {
         this.race.scene.environment = null;
         this.renderer.shadowMap.enabled = false;
         this.quality = { ...this.quality, environnement: false, shadows: false };
+        // le composer de post-traitement est lui-même un point de défaillance
+        // possible (cibles de rendu flottantes) : on repasse en rendu direct
+        this.postfx?.dispose();
+        this.postfx = null;
         toast('Qualité réduite automatiquement pour rétablir l\'affichage');
       }
     }
@@ -509,6 +527,7 @@ export class Game {
 
   private resize(): void {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.postfx?.setSize(window.innerWidth, window.innerHeight);
     this.race?.resize(this.aspect());
   }
 }

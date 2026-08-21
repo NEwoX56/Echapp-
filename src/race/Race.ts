@@ -24,6 +24,8 @@ import { DirectorRadio, type RadioMessage, type RivalInfo } from './DirectorRadi
 import type { AudioEngine } from '../audio/AudioEngine';
 import type { Ambiance } from '../audio/Music';
 import type { MusicDirector } from '../audio/MusicDirector';
+import { atmosphereDe, brumeFinale } from './Atmosphere';
+import { Rain } from './Rain';
 
 export interface RaceHudState {
   energy: number;
@@ -181,6 +183,9 @@ export class Race {
 
   private sun: THREE.DirectionalLight;
   private sky: import('./Sky').Sky;
+  /** décalage du soleil par rapport au coureur ; varie avec l'heure de l'étape (Atmosphere.ts) */
+  private sunOffset = new THREE.Vector3(38, 62, -30);
+  private rain: Rain | null = null;
   private camPos = new THREE.Vector3();
   private camLook = new THREE.Vector3();
   private tmp = new THREE.Vector3();
@@ -204,7 +209,7 @@ export class Race {
     this.gc = gc;
     this.audio = audio.engine;
     this.music = audio.music;
-    this.audio.demarrerAmbiance();
+    this.audio.demarrerAmbiance(stage.meteo === 'pluie');
     this.playerTeam = playerCfg.team;
     this.playerJerseys = playerCfg.jerseys;
     this.porteurJaune = jerseys.general;
@@ -226,16 +231,22 @@ export class Race {
     // ambiance : panorama photographique si disponible, dégradé uni sinon
     const mountain = stage.type === 'montagne';
     this.sky = assets.sky;
-    const fogHex = this.sky.fogColor(stage.type);
+    const atmo = atmosphereDe(stage.periode, stage.meteo);
+    this.sunOffset.set(...atmo.soleilPos);
+    const fogHex = brumeFinale(this.sky.fogColor(stage.type), atmo);
     const cielOk = quality.cielTexture && this.sky.apply(this.scene, stage.type, quality.environnement);
     if (!cielOk) {
       this.scene.background = new THREE.Color(mountain ? 0x9db8d6 : 0x9fd0f0);
     }
+    this.scene.backgroundIntensity = (this.scene.backgroundIntensity || 1) * atmo.fondIntensite;
+    if (this.scene.environmentIntensity) this.scene.environmentIntensity *= atmo.fondIntensite;
     // la brume raccorde le relief lointain à la teinte du ciel
-    this.scene.fog = new THREE.Fog(fogHex, 220, 1500);
-    this.scene.add(new THREE.HemisphereLight(0xfff6e0, 0x4a5240, 0.85));
-    const sun = new THREE.DirectionalLight(0xfff2d0, 2.4);
-    sun.position.set(38, 62, -30);
+    this.scene.fog = new THREE.Fog(fogHex, atmo.pluie ? 90 : 220, atmo.brumeLointain);
+    this.scene.add(
+      new THREE.HemisphereLight(atmo.hemisphereCiel, atmo.hemisphereSol, atmo.hemisphereIntensite)
+    );
+    const sun = new THREE.DirectionalLight(atmo.soleilCouleur, atmo.soleilIntensite);
+    sun.position.set(...atmo.soleilPos);
     sun.castShadow = quality.shadows;
     // la caméra d'ombre ne couvre qu'une petite zone autour du joueur :
     // elle le suit, ce qui donne des ombres nettes sans coût mémoire
@@ -252,6 +263,11 @@ export class Race {
     this.scene.add(sun);
     this.scene.add(sun.target);
     this.sun = sun;
+
+    if (atmo.pluie) {
+      this.rain = new Rain();
+      this.scene.add(this.rain.group);
+    }
 
     this.camera = new THREE.PerspectiveCamera(62, aspect, 0.1, 3000);
 
@@ -421,6 +437,7 @@ export class Race {
         this.audio.bip(apres <= 0);
       }
       this.updateCamera(dt, false);
+      this.rain?.update(dt, this.tmp);
       return;
     }
     this.clock += dt;
@@ -487,6 +504,7 @@ export class Race {
     this.caravane?.update(dt, this.riders, this.player);
 
     this.updateCamera(dt, false);
+    this.rain?.update(dt, this.tmp);
   }
 
   /**
@@ -893,7 +911,7 @@ export class Race {
       this.track.updateDistant(this.tmp);
       this.sun.target.position.copy(this.tmp);
       this.sun.target.updateMatrixWorld();
-      this.sun.position.set(this.tmp.x + 38, this.tmp.y + 62, this.tmp.z - 30);
+      this.sun.position.set(this.tmp.x + this.sunOffset.x, this.tmp.y + this.sunOffset.y, this.tmp.z + this.sunOffset.z);
       return;
     }
 
@@ -930,7 +948,7 @@ export class Race {
       this.track.updateDistant(this.tmp);
       this.sun.target.position.copy(this.tmp);
       this.sun.target.updateMatrixWorld();
-      this.sun.position.set(this.tmp.x + 38, this.tmp.y + 62, this.tmp.z - 30);
+      this.sun.position.set(this.tmp.x + this.sunOffset.x, this.tmp.y + this.sunOffset.y, this.tmp.z + this.sunOffset.z);
       return;
     }
 
@@ -1010,7 +1028,7 @@ export class Race {
     // recentrer la zone d'ombre sur le coureur
     this.sun.target.position.copy(this.tmp);
     this.sun.target.updateMatrixWorld();
-    this.sun.position.set(this.tmp.x + 38, this.tmp.y + 62, this.tmp.z - 30);
+    this.sun.position.set(this.tmp.x + this.sunOffset.x, this.tmp.y + this.sunOffset.y, this.tmp.z + this.sunOffset.z);
   }
 
   resize(aspect: number): void {
@@ -1024,6 +1042,7 @@ export class Race {
     this.sky.detach();
     this.radio.reset();
     this.track.dispose();
+    this.rain?.dispose();
     for (const r of this.riders) r.visual.dispose();
   }
 }

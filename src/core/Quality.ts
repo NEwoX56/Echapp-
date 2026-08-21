@@ -40,6 +40,8 @@ export interface QualitySettings {
   intervalleOmbre: number;
   /** rochers et arbres : diviseur de densité */
   densiteDecor: number;
+  /** bloom + vignette : une passe de rendu complète en plus de la scène */
+  postProcessing: boolean;
 }
 
 const PRESETS: Record<Exclude<Quality, 'auto'>, QualitySettings> = {
@@ -56,7 +58,8 @@ const PRESETS: Record<Exclude<Quality, 'auto'>, QualitySettings> = {
     segmentsRoute: 520,
     distanceOmbre: 60,
     intervalleOmbre: 1,
-    densiteDecor: 1
+    densiteDecor: 1,
+    postProcessing: true
   },
   moyenne: {
     shadows: true,
@@ -71,7 +74,8 @@ const PRESETS: Record<Exclude<Quality, 'auto'>, QualitySettings> = {
     segmentsRoute: 320,
     distanceOmbre: 26,
     intervalleOmbre: 2,
-    densiteDecor: 0.7
+    densiteDecor: 0.7,
+    postProcessing: false
   },
   basse: {
     shadows: false,
@@ -86,7 +90,8 @@ const PRESETS: Record<Exclude<Quality, 'auto'>, QualitySettings> = {
     segmentsRoute: 200,
     distanceOmbre: 0,
     intervalleOmbre: 3,
-    densiteDecor: 0.45
+    densiteDecor: 0.45,
+    postProcessing: false
   }
 };
 

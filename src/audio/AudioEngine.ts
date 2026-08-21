@@ -33,6 +33,8 @@ export class AudioEngine {
   private foule: { src: AudioBufferSourceNode; filtre: BiquadFilterNode; gain: GainNode } | null =
     null;
   private roulement: { osc: OscillatorNode; gain: GainNode } | null = null;
+  private pluie: { src: AudioBufferSourceNode; filtre: BiquadFilterNode; gain: GainNode } | null =
+    null;
 
   get context(): AudioContext | null {
     return this.ctx;
@@ -284,7 +286,7 @@ export class AudioEngine {
   /* ---------------- boucles continues ---------------- */
 
   /** démarre vent, foule et roulement ; sans effet si déjà lancés */
-  demarrerAmbiance(): void {
+  demarrerAmbiance(pluie = false): void {
     const ctx = this.ctx;
     const out = this.sortie('effets');
     if (!ctx || !out || !this.bruit || this.vent) return;
@@ -342,6 +344,27 @@ export class AudioEngine {
       osc.start();
       this.roulement = { osc, gain };
     }
+
+    // pluie : le même bruit blanc, mais passe-haut — un grain fin et continu,
+    // sans rapport avec le grondement grave du vent ou le murmure de la foule
+    if (pluie) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.bruit;
+      src.loop = true;
+      src.playbackRate.value = 1.3;
+      const filtre = ctx.createBiquadFilter();
+      filtre.type = 'highpass';
+      filtre.frequency.value = 2200;
+      filtre.Q.value = 0.5;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(filtre);
+      filtre.connect(gain);
+      gain.connect(out);
+      src.start();
+      this.pluie = { src, filtre, gain };
+      gain.gain.setTargetAtTime(0.16, ctx.currentTime, 0.8);
+    }
   }
 
   /**
@@ -372,7 +395,7 @@ export class AudioEngine {
     const ctx = this.ctx;
     if (!ctx) return;
     const t = ctx.currentTime;
-    for (const n of [this.vent, this.foule]) {
+    for (const n of [this.vent, this.foule, this.pluie]) {
       if (n) {
         n.gain.gain.setTargetAtTime(0, t, 0.2);
         n.src.stop(t + 1.2);
@@ -385,5 +408,6 @@ export class AudioEngine {
     this.vent = null;
     this.foule = null;
     this.roulement = null;
+    this.pluie = null;
   }
 }

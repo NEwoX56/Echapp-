@@ -35,11 +35,29 @@ await page.click('[data-action="partir"]').catch(()=>{});
         tris += n * (o.count || 1);
       }
     });
-    const info = g.renderer.info;
+    // avec le post-traitement (bloom/vignette), une frame déclenche plusieurs
+    // renderer.render() internes au composer — chacun remet à zéro
+    // renderer.info au démarrage. On les cumule sur un cycle complet, sans
+    // quoi on ne lit que la toute dernière passe (le carré plein écran final).
+    let draws = 0, trisRendus = 0;
+    if (g.postfx) {
+      const orig = g.renderer.render.bind(g.renderer);
+      g.renderer.render = (...args) => {
+        orig(...args);
+        draws += g.renderer.info.render.calls;
+        trisRendus += g.renderer.info.render.triangles;
+      };
+      g.postfx.render(race.scene, race.camera);
+      g.renderer.render = orig;
+    } else {
+      g.renderer.render(race.scene, race.camera);
+      draws = g.renderer.info.render.calls;
+      trisRendus = g.renderer.info.render.triangles;
+    }
     return {
       meshes, tris: Math.round(tris), ombres,
-      draws: info.render.calls,
-      trisRendus: info.render.triangles,
+      draws,
+      trisRendus,
       aa: g.renderer.getContext().getContextAttributes().antialias,
       ratio: g.renderer.getPixelRatio(),
       q: g.qualitySettings

@@ -1,7 +1,7 @@
 import type { TourDef } from './types';
 
 /**
- * Trois grands tours originaux, débloqués par niveau.
+ * Cinq grands tours originaux, débloqués par niveau.
  * worldLength calibré pour 3 à 5 min par étape ; displayKm est cosmétique.
  */
 export const TOURS: TourDef[] = [
@@ -475,6 +475,89 @@ export const TOURS: TourDef[] = [
         profile: [[0, 20], [0.4, 24], [0.7, 18], [1, 22]],
         description: 'Parade puis sprint final. Le vainqueur lève les bras.',
         sprints: [{ at: 0.72, name: 'Sprint de la Couronne' }]
+      }
+    ]
+  },
+  {
+    id: 'midi',
+    name: 'Tour du Midi',
+    region: 'Collines de Cassaigne',
+    requiredLevel: 14,
+    requiredTour: 'couronne',
+    stages: [
+      {
+        id: 'midi-1',
+        name: 'Étape des Vignes',
+        type: 'plaine',
+        worldLength: 2900,
+        displayKm: 168,
+        seed: 512,
+        biome: 'mediterraneen',
+        profile: [[0, 15], [0.3, 22], [0.6, 10], [0.85, 18], [1, 12]],
+        description:
+          "Départ vers le sud. Vignes en terrasses et villages de pierre ocre, bien loin des paysages du nord.",
+        sprints: [{ at: 0.55, name: 'Sprint de Cassaigne' }]
+      },
+      {
+        id: 'midi-2',
+        name: "Collines de l'Estérel",
+        type: 'vallonnee',
+        worldLength: 3100,
+        displayKm: 178,
+        seed: 524,
+        biome: 'mediterraneen',
+        profile: [[0, 18], [0.28, 46], [0.5, 24], [0.72, 58], [1, 20]],
+        description: 'Routes sinueuses entre pinèdes et roche rouge, sous un ciel qui ne se couvre jamais.',
+        climbs: [
+          { at: 0.3, name: "Côte de l'Estérel", category: 3 },
+          { at: 0.72, name: 'Mur de Cassaigne', category: 2 }
+        ],
+        sprints: [{ at: 0.5, name: "Sprint de l'Estérel" }]
+      },
+      {
+        id: 'midi-3',
+        name: 'Chrono de Solenne',
+        type: 'clm',
+        worldLength: 2100,
+        displayKm: 29,
+        seed: 538,
+        biome: 'mediterraneen',
+        profile: [[0, 8], [0.35, 14], [0.65, 9], [1, 11]],
+        description: 'Contre-la-montre entre les oliviers, chaussée sèche et vent tiède.'
+      },
+      {
+        id: 'midi-4',
+        name: "Pic de l'Aigle Blanc",
+        type: 'montagne',
+        worldLength: 3500,
+        displayKm: 184,
+        seed: 551,
+        biome: 'mediterraneen',
+        periode: 'crepuscule',
+        profile: [
+          [0, 12], [0.2, 24], [0.36, 68], [0.48, 46],
+          [0.66, 102], [0.76, 78], [0.92, 138], [1, 130]
+        ],
+        description: "Arrivée au sommet du Pic de l'Aigle Blanc, dans la roche calcaire, sous le soleil couchant.",
+        climbs: [
+          { at: 0.36, name: 'Col de Cassaigne', category: 2 },
+          { at: 0.66, name: 'Col des Salines', category: 1 },
+          { at: 0.92, name: "Pic de l'Aigle Blanc", category: 0 }
+        ]
+      },
+      {
+        id: 'midi-5',
+        name: 'Corniche de la Baie',
+        type: 'plaine',
+        worldLength: 2800,
+        displayKm: 158,
+        seed: 566,
+        biome: 'mediterraneen',
+        profile: [[0, 10], [0.35, 16], [0.65, 8], [1, 6]],
+        description:
+          "Dernière étape le long de la baie. La corniche à découvert peut scinder le peloton avant l'arrivée, où le vainqueur du Tour du Midi lève les bras.",
+        sprints: [{ at: 0.6, name: 'Sprint de la Baie' }],
+        vent: [{ from: 0.3, to: 0.48, name: 'Corniche de la Baie' }]
       }
     ]
   }

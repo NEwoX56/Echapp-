@@ -282,7 +282,7 @@ export class Track {
         ROAD_WIDTH / 2 + 1.8,
         0.006,
         -0.06,
-        new THREE.MeshStandardMaterial({ color: 0x6a6357, roughness: 1 })
+        new THREE.MeshStandardMaterial({ color: this.biome().bordChemin, roughness: 1 })
       )
     );
     this.group.add(
@@ -292,11 +292,29 @@ export class Track {
         -0.054,
         -0.55,
         new THREE.MeshStandardMaterial({
-          color: this.stage.type === 'montagne' ? 0x5d6b46 : 0x6f9350,
+          color: this.biome().herbe,
           roughness: 1
         })
       )
     );
+  }
+
+  /** palette régionale : deux ambiances de terrain, tempérée ou méditerranéenne */
+  private biome(): { herbe: number; seche: number; roche: number; bordChemin: number } {
+    if (this.stage.biome === 'mediterraneen') {
+      return {
+        herbe: this.stage.type === 'montagne' ? 0x8a8258 : 0xa8a45c,
+        seche: 0xc4a35f,
+        roche: 0x8a7a63,
+        bordChemin: 0x7a6a52
+      };
+    }
+    return {
+      herbe: this.stage.type === 'montagne' ? 0x5d6b46 : 0x6f9350,
+      seche: 0x8a8a63,
+      roche: 0x6b6558,
+      bordChemin: 0x6a6357
+    };
   }
 
   private buildRibbon(
@@ -596,10 +614,11 @@ export class Track {
     const indices: number[] = [];
     const p = new THREE.Vector3();
 
-    const rock = new THREE.Color(0x6b6558);
-    const grass = new THREE.Color(this.stage.type === 'montagne' ? 0x5d6b46 : 0x6f9350);
+    const palette = this.biome();
+    const rock = new THREE.Color(palette.roche);
+    const grass = new THREE.Color(palette.herbe);
     const snow = new THREE.Color(0xdfe6ee);
-    const dry = new THREE.Color(0x8a8a63);
+    const dry = new THREE.Color(palette.seche);
     const c = new THREE.Color();
 
     // le terrain accompagne la route jusque dans le dégagement d'arrivée

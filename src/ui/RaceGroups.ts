@@ -135,7 +135,8 @@ export function calculerGroupes(
  * Chaque tour a son emblème, dessiné en SVG et donc net à toute taille.
  * Ce sont des créations originales pour les épreuves du jeu : sommet pour le
  * Tour des Cimes, vague pour la Ronde du Littoral, chaîne traversée pour la
- * Grande Traversée, couronne pour La Couronne.
+ * Grande Traversée, couronne pour La Couronne, soleil sur les collines pour
+ * le Tour du Midi.
  */
 export function logoTour(tourId: string): string {
   const cadre = (contenu: string, fond: string) => `
@@ -164,6 +165,13 @@ export function logoTour(tourId: string): string {
         `<path d="M12 38 L12 22 L20 29 L28 17 L36 29 L44 22 L44 38 Z" fill="none" stroke="#ffd633" stroke-width="2.6" stroke-linejoin="round"/>
          <path d="M12 42 L44 42" stroke="#ffd633" stroke-width="3" stroke-linecap="round"/>`,
         '#ffd633'
+      );
+    case 'midi':
+      return cadre(
+        `<circle cx="28" cy="20" r="7" fill="#e8935a"/>
+         <path d="M8 40 Q18 28 28 36 T48 40" fill="none" stroke="#c9793d" stroke-width="3" stroke-linecap="round"/>
+         <path d="M8 46 Q18 38 28 44 T48 46" fill="none" stroke="#8a5a34" stroke-width="2.4" stroke-linecap="round" opacity="0.75"/>`,
+        '#e8935a'
       );
     default:
       return cadre(

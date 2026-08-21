@@ -157,6 +157,7 @@ export class Decor {
   private tan = new THREE.Vector3();
   private buildings: BuildingKit | null;
   private scenery: SceneryAssets | null;
+  private readonly med: boolean;
 
   constructor(
     piste: PisteDecor,
@@ -168,6 +169,7 @@ export class Decor {
   ) {
     this.piste = piste;
     this.q = q;
+    this.med = stage.biome === 'mediterraneen';
     this.buildings = buildings?.available ? buildings : null;
     this.scenery = scenery?.hasAny ? scenery : null;
     this.zones = decouperZones(stage, rand);
@@ -329,6 +331,10 @@ export class Decor {
   private static readonly TEINTES_HAUTS = ['#6d707a', '#8a95a3', '#8c7a68', '#767a72'];
   private static readonly TEINTES_MOYENS = ['#8a8073', '#a99378', '#8c9088', '#96877a'];
   private static readonly TEINTES_TOIT = [0x8c4a35, 0x5a5f68, 0x6b3d34];
+  /** région méditerranéenne : pierre claire, façades ocres, toits en tuile */
+  private static readonly TEINTES_HAUTS_MED = ['#8a7a63', '#a99378', '#c2a878', '#8c8270'];
+  private static readonly TEINTES_MOYENS_MED = ['#d9c39a', '#c9a876', '#e0cfa0', '#b89468'];
+  private static readonly TEINTES_TOIT_MED = [0xb5651d, 0xc17a3d, 0xa8562a];
   /*
    * La face habitée (fenêtres/porte) de chaque pièce du kit modulaire
    * regarde vers -X dans le fichier source. Un immeuble assemblé est
@@ -341,12 +347,15 @@ export class Decor {
   private batir(z: Zone, rand: () => number, urbain: boolean): void {
     const d = this.q.densiteDecor;
     const pas = (urbain ? 13 : 22) / Math.max(0.3, d);
-    const nHauts = Decor.TEINTES_HAUTS.length;
-    const nMoyens = Decor.TEINTES_MOYENS.length;
+    const teintesHauts = this.med ? Decor.TEINTES_HAUTS_MED : Decor.TEINTES_HAUTS;
+    const teintesMoyens = this.med ? Decor.TEINTES_MOYENS_MED : Decor.TEINTES_MOYENS;
+    const teintesToit = this.med ? Decor.TEINTES_TOIT_MED : Decor.TEINTES_TOIT;
+    const nHauts = teintesHauts.length;
+    const nMoyens = teintesMoyens.length;
     const hauts: Placement[][] = Array.from({ length: nHauts }, () => []);
     const moyens: Placement[][] = Array.from({ length: nMoyens }, () => []);
     const maisons: Placement[] = [];
-    const toits: Placement[][] = Decor.TEINTES_TOIT.map(() => []);
+    const toits: Placement[][] = teintesToit.map(() => []);
     // couronnement des tours : muret en retrait, et parfois citerne ou antenne
     const casquettes: Placement[] = [];
     const citernes: Placement[] = [];
@@ -430,7 +439,7 @@ export class Decor {
           const s = new THREE.Vector3(5 + rand() * 2, h, 5 + rand() * 2);
           maisons.push({ dist, lat, y, rotY, scale: s });
           // toit à deux pentes (pignon) posé au sommet des murs, avec léger débord
-          toits[Math.floor(rand() * Decor.TEINTES_TOIT.length)].push({
+          toits[Math.floor(rand() * teintesToit.length)].push({
             dist,
             lat,
             y: y + h,
@@ -455,14 +464,14 @@ export class Decor {
       return new THREE.CylinderGeometry(r, r, 1, 3).rotateZ(Math.PI / 2).translate(0, r / 2, 0);
     };
 
-    Decor.TEINTES_HAUTS.forEach((teinte, i) =>
+    teintesHauts.forEach((teinte, i) =>
       this.ajouter(`imm-haut-${i}`, cube, facade(teinte, true, 2, 4), hauts[i], true)
     );
-    Decor.TEINTES_MOYENS.forEach((teinte, i) =>
+    teintesMoyens.forEach((teinte, i) =>
       this.ajouter(`imm-moyen-${i}`, cube, facade(teinte, true, 2, 2.4), moyens[i], true)
     );
-    this.ajouter('maison', cube, facade('#c9bda8', false, 1.6, 1.2), maisons, true);
-    Decor.TEINTES_TOIT.forEach((couleur, i) =>
+    this.ajouter('maison', cube, facade(this.med ? '#e8d5a8' : '#c9bda8', false, 1.6, 1.2), maisons, true);
+    teintesToit.forEach((couleur, i) =>
       this.ajouter(
         `toit-${i}`,
         gable,

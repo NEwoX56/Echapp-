@@ -2,6 +2,9 @@ import type { RiderAppearance, ClassementKey } from './appearance';
 
 export type StageType = 'plaine' | 'vallonnee' | 'montagne' | 'clm';
 
+/** palette régionale du terrain et des bâtiments : deux régions, deux ambiances */
+export type Biome = 'tempere' | 'mediterraneen';
+
 /** moment de la journée : influence la lumière, le ciel et la brume */
 export type Periode = 'jour' | 'aube' | 'crepuscule' | 'nuit';
 
@@ -59,6 +62,8 @@ export interface StageDef {
   paves?: PaveDef[];
   /** secteurs exposés au vent de côté : le peloton peut s'y scinder en bordures */
   vent?: VentDef[];
+  /** région : recolore terrain et bâtiments. Par défaut 'tempere' si absent */
+  biome?: Biome;
 }
 
 export interface TourDef {

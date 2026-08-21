@@ -28,11 +28,11 @@ import { appliquerForme } from '../data/progression';
 import { HUD } from '../ui/HUD';
 import { Results } from '../ui/Results';
 import { getRoster } from '../data/rosterStore';
-import { toast } from '../ui/util';
+import { toast, formatGap } from '../ui/util';
 import { PostFX } from './PostFX';
 import type { StageDef } from '../data/types';
 
-type GameState = 'menu' | 'briefing' | 'race' | 'results';
+type GameState = 'menu' | 'briefing' | 'race' | 'results' | 'replay';
 
 export class Game {
   private renderer: THREE.WebGLRenderer;
@@ -46,6 +46,7 @@ export class Game {
   private menuEl = document.getElementById('screen-menu')!;
   private hudEl = document.getElementById('screen-hud')!;
   private resultsEl = document.getElementById('screen-results')!;
+  private replayEl = document.getElementById('screen-replay')!;
   private briefingEl = document.getElementById('screen-briefing')!;
   private canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
 
@@ -284,7 +285,8 @@ export class Game {
     this.hudEl.classList.toggle('hidden', s !== 'race');
     this.nameTags?.setEnCourse(s === 'race');
     this.resultsEl.classList.toggle('hidden', s !== 'results');
-    this.canvas.classList.toggle('dimmed', s !== 'race');
+    this.replayEl.classList.toggle('hidden', s !== 'replay');
+    this.canvas.classList.toggle('dimmed', s !== 'race' && s !== 'replay');
   }
 
   private showMenu(): void {
@@ -385,11 +387,38 @@ export class Game {
     this.music.setIntensite(gagne ? 0.8 : 0.4);
     this.setState('results');
     const suivi = this.race.suivi;
-    this.results.show(stage, rows, points, this.career, suivi, () => {
-      this.disposeRace();
-      this.music.jouer('menu');
-      this.showMenu();
-    });
+    this.results.show(
+      stage,
+      rows,
+      points,
+      this.career,
+      suivi,
+      () => {
+        this.disposeRace();
+        this.music.jouer('menu');
+        this.showMenu();
+      },
+      this.race.hasReplay ? () => this.showReplay() : null
+    );
+  }
+
+  /** rejoue l'arrivée enregistrée pendant la course, caméra fixe façon ligne d'arrivée */
+  private showReplay(): void {
+    if (!this.race || !this.race.hasReplay) return;
+    const rows = this.race.getResults();
+    const gap = rows.length > 1 ? rows[1].time - rows[0].time : Infinity;
+    const photoFinish = gap < 0.3;
+    this.replayEl.innerHTML = `
+      <div class="replay-wrap">
+        ${photoFinish ? `<div class="replay-photo">PHOTO FINISH</div>` : ''}
+        <div class="replay-info">${rows[0].name} l'emporte${gap < Infinity ? ` · ${formatGap(gap)}` : ''}</div>
+        <button class="btn-primary" data-action="replay-retour">Retour aux résultats</button>
+      </div>`;
+    this.replayEl
+      .querySelector<HTMLButtonElement>('[data-action="replay-retour"]')!
+      .addEventListener('click', () => this.setState('results'));
+    this.race.startReplay();
+    this.setState('replay');
   }
 
   private disposeRace(): void {
@@ -513,6 +542,9 @@ export class Game {
       this.mesurerFps(dt);
       this.safeRender();
       if (this.race.isOver) this.endRace();
+    } else if (this.state === 'replay' && this.race) {
+      this.race.updateReplay(dt);
+      this.safeRender();
     } else if (this.race) {
       // écran résultats : la 3D reste en fond
       this.safeRender();

@@ -67,6 +67,21 @@ export interface RaceHudState {
   };
 }
 
+interface ReplaySnapshot {
+  riderId: string;
+  dist: number;
+  lane: number;
+  speed: number;
+  standing: number;
+  effort: number;
+  celebration: number;
+}
+interface ReplayFrame {
+  /** secondes écoulées depuis le début de l'enregistrement */
+  t: number;
+  riders: ReplaySnapshot[];
+}
+
 export interface RadarEntry {
   id: string;
   name: string;
@@ -150,6 +165,15 @@ export class Race {
   private crevaisonJoueurAt = -1;
   /** progression 0..1 à laquelle chaque adversaire tiré au sort crève */
   private crevaisonBots = new Map<string, number>();
+
+  /* ---- replay de l'arrivée ---- */
+  private replayFrames: ReplayFrame[] = [];
+  private enregistrementActif = false;
+  private replayStart = 0;
+  private replayIndex = 0;
+  private replayElapsed = 0;
+  /** lecture en cours (false une fois la dernière image atteinte : le replay reste figé) */
+  replayPlaying = false;
   private audio: AudioEngine;
   private music: MusicDirector;
   private ambiance: Ambiance = 'course';
@@ -479,6 +503,7 @@ export class Race {
     this.checkMarkers();
     this.majBordures();
     this.majIncidents();
+    this.majEnregistrementArrivee();
 
     // ravitaillement
     if (
@@ -847,6 +872,105 @@ export class Race {
         if (Math.abs(r.dist - p.dist) < 40) this.onEvent(`${r.name} a crevé !`);
       }
     }
+  }
+
+  /**
+   * Enregistrement de l'arrivée : dès que la tête de course entre dans les
+   * derniers 220 mètres, chaque image est capturée (position, allure,
+   * danseuse, célébration de chaque coureur) pour permettre de la rejouer
+   * ensuite. Pas de contre-la-montre : les coureurs n'y sont jamais groupés.
+   */
+  private majEnregistrementArrivee(): void {
+    if (this.stage.type === 'clm') return;
+    if (this.replayFrames.length > 900) return; // filet de sécurité (~15 s à 60 im/s)
+    let lead = -Infinity;
+    for (const r of this.riders) lead = Math.max(lead, r.dist);
+    if (!this.enregistrementActif) {
+      if (this.track.length - lead > 220) return;
+      this.enregistrementActif = true;
+      this.replayStart = this.clock;
+    }
+    this.replayFrames.push({
+      t: this.clock - this.replayStart,
+      riders: this.riders.map((r) => ({
+        riderId: r.id,
+        dist: r.dist,
+        lane: r.lane,
+        speed: r.speed,
+        standing: r.standing,
+        effort: r.effort,
+        celebration: r.celebration
+      }))
+    });
+  }
+
+  /** assez d'images enregistrées pour proposer de revoir l'arrivée */
+  get hasReplay(): boolean {
+    return this.replayFrames.length > 5;
+  }
+
+  /** relance la lecture depuis le début de l'enregistrement */
+  startReplay(): void {
+    this.replayElapsed = 0;
+    this.replayIndex = 0;
+    this.replayPlaying = true;
+  }
+
+  /** avance la lecture du replay : repositionne chaque coureur sans repasser par la physique */
+  updateReplay(dtBrut: number): void {
+    if (!this.replayFrames.length) return;
+    const VITESSE = 0.42; // ralenti cinématique
+    const dt = dtBrut * VITESSE;
+    if (this.replayPlaying) {
+      this.replayElapsed += dt;
+      const dernier = this.replayFrames[this.replayFrames.length - 1].t;
+      if (this.replayElapsed >= dernier) {
+        this.replayElapsed = dernier;
+        this.replayPlaying = false;
+      }
+      while (
+        this.replayIndex < this.replayFrames.length - 1 &&
+        this.replayFrames[this.replayIndex + 1].t <= this.replayElapsed
+      ) {
+        this.replayIndex++;
+      }
+    }
+    const frame = this.replayFrames[this.replayIndex];
+    for (const snap of frame.riders) {
+      const r = this.riders.find((x) => x.id === snap.riderId);
+      if (!r) continue;
+      r.dist = snap.dist;
+      r.lane = snap.lane;
+      r.speed = snap.speed;
+      r.standing = snap.standing;
+      r.effort = snap.effort;
+      r.celebration = snap.celebration;
+      r.updateVisual(dt, this.track);
+    }
+    this.track.animer(dt);
+    this.updateReplayCamera(frame);
+  }
+
+  /** caméra façon moto de retransmission : suit la tête de course jusqu'à la ligne et au-delà */
+  private updateReplayCamera(frame: ReplayFrame): void {
+    let lead = -Infinity;
+    for (const s of frame.riders) lead = Math.max(lead, s.dist);
+    this.track.pose(lead, 0, this.tmp, this.tan);
+    const perp = new THREE.Vector3(-this.tan.z, 0, this.tan.x).normalize();
+    const cible = this.tmp
+      .clone()
+      .add(perp.multiplyScalar(7.5))
+      .add(this.tan.clone().multiplyScalar(-1.5))
+      .add(new THREE.Vector3(0, 2.1, 0));
+    const regard = this.tmp.clone().add(new THREE.Vector3(0, 1.2, 0));
+    this.camPos.lerp(cible, 0.18);
+    this.camLook.lerp(regard, 0.18);
+    this.camera.position.copy(this.camPos);
+    this.camera.lookAt(this.camLook);
+    this.track.updateDistant(this.tmp);
+    this.sun.target.position.copy(this.tmp);
+    this.sun.target.updateMatrixWorld();
+    this.sun.position.set(this.tmp.x + this.sunOffset.x, this.tmp.y + this.sunOffset.y, this.tmp.z + this.sunOffset.z);
   }
 
   private finalize(): void {

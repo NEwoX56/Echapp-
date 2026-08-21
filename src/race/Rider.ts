@@ -260,7 +260,8 @@ export class Rider {
     this.gels = Math.min(4, this.gels + 1);
   }
 
-  private updateVisual(dt: number, track: Track): void {
+  /** repositionne le modèle 3D à partir de dist/lane courants (aussi utilisé par le replay) */
+  updateVisual(dt: number, track: Track): void {
     /*
      * On ne borne plus la position visuelle à la ligne d'arrivée. Ce plafond
      * datait de l'époque où la route s'y arrêtait : le coureur y restait

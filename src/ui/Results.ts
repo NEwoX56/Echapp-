@@ -25,7 +25,8 @@ export class Results {
       sprintsTop3: number;
       aEteDansEchappee: boolean;
     },
-    onContinue: () => void
+    onContinue: () => void,
+    onReplay: (() => void) | null = null
   ): void {
     const playerRow = rows.find((r) => r.isPlayer)!;
     const playerPos = rows.indexOf(playerRow) + 1;
@@ -179,12 +180,20 @@ export class Results {
           ${leveledUp ? `<span class="lvl">Niveau ${newLevel} !</span>` : ''}
         </div>
         ${podium}
-        <button class="btn-primary" data-action="continue">Continuer</button>
+        <div class="results-actions">
+          ${onReplay ? `<button class="btn-secondary" data-action="replay">Revoir l'arrivée</button>` : ''}
+          <button class="btn-primary" data-action="continue">Continuer</button>
+        </div>
       </div>
     `;
 
     this.root
       .querySelector<HTMLButtonElement>('[data-action="continue"]')!
       .addEventListener('click', onContinue);
+    if (onReplay) {
+      this.root
+        .querySelector<HTMLButtonElement>('[data-action="replay"]')!
+        .addEventListener('click', onReplay);
+    }
   }
 }

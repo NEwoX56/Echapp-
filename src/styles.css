@@ -469,6 +469,7 @@ button { font-family: inherit; cursor: pointer; }
 .hud-marker.col { border-left-color: #d6382c; }
 .hud-marker.sprint { border-left-color: #2f9e5b; }
 .hud-marker.pave { border-left-color: #8a7a5c; }
+.hud-marker.vent { border-left-color: #4fb3c9; }
 .hud-marker b { color: #fff; margin-right: 5px; }
 .hud-marker span { opacity: 0.7; margin-left: 6px; }
 

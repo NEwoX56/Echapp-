@@ -45,6 +45,11 @@ export interface PaveMarker {
   to: number;
   name: string;
 }
+export interface VentMarker {
+  from: number;
+  to: number;
+  name: string;
+}
 
 export class Track {
   readonly stage: StageDef;
@@ -56,6 +61,7 @@ export class Track {
   readonly climbs: ClimbMarker[] = [];
   readonly sprints: SprintMarker[] = [];
   readonly paveZones: PaveMarker[] = [];
+  readonly ventZones: VentMarker[] = [];
   /** chaîne de sommets lointains : suit le coureur comme un décor de fond */
   private distantRange: THREE.Mesh | null = null;
 
@@ -118,6 +124,9 @@ export class Track {
     for (const p of stage.paves ?? []) {
       this.paveZones.push({ from: p.from * this.length, to: p.to * this.length, name: p.name });
     }
+    for (const v of stage.vent ?? []) {
+      this.ventZones.push({ from: v.from * this.length, to: v.to * this.length, name: v.name });
+    }
 
     this.buildRoad();
     this.buildTerrain(stage.seed);
@@ -157,6 +166,12 @@ export class Track {
   /** vrai si la distance donnée tombe dans un secteur pavé */
   isPave(dist: number): boolean {
     for (const z of this.paveZones) if (dist >= z.from && dist <= z.to) return true;
+    return false;
+  }
+
+  /** vrai si la distance donnée tombe dans un secteur exposé au vent de côté */
+  isVent(dist: number): boolean {
+    for (const z of this.ventZones) if (dist >= z.from && dist <= z.to) return true;
     return false;
   }
 

@@ -11,7 +11,7 @@ import type { RiderAppearance, ClassementKey } from '../data/appearance';
 import { reglage, scaleStats } from '../data/difficulty';
 import { AWARDS } from '../data/appearance';
 import { KOM_POINTS, SPRINT_POINTS, FINISH_POINTS } from '../data/tours';
-import { Track } from './Track';
+import { Track, type VentMarker } from './Track';
 import { Rider } from './Rider';
 import { AIController } from './AIController';
 import { RaceTactics, type EtatCourse } from './RaceTactics';
@@ -45,7 +45,7 @@ export interface RaceHudState {
   gels: number;
   standing: boolean;
   /** prochain point chaud : col ou sprint */
-  nextMarker: { kind: 'col' | 'sprint' | 'pave'; name: string; inMeters: number } | null;
+  nextMarker: { kind: 'col' | 'sprint' | 'pave' | 'vent'; name: string; inMeters: number } | null;
   gapAhead: number | null;
   gapBehind: number | null;
   /** coureurs à placer sur la mini-carte */
@@ -142,6 +142,8 @@ export class Race {
   private pointsMap = new Map<string, StagePoints>();
   private passedSprints = new Set<number>();
   private passedClimbs = new Set<number>();
+  /** secteur de vent de côté en cours, si le joueur y est */
+  private ventZoneEnCours: VentMarker | null = null;
   private audio: AudioEngine;
   private music: MusicDirector;
   private ambiance: Ambiance = 'course';
@@ -453,6 +455,7 @@ export class Race {
     for (const r of this.riders) r.updatePhysics(dt, this.track, this.riders);
 
     this.checkMarkers();
+    this.majBordures();
 
     // ravitaillement
     if (
@@ -674,6 +677,15 @@ export class Race {
         nextSprint = { name: sp.name, inMeters: d };
       }
     }
+    let nextVent = null as { name: string; inMeters: number } | null;
+    let bv = Infinity;
+    for (const z of this.track.ventZones) {
+      const d = z.from - p.dist;
+      if (d > 0 && d < bv) {
+        bv = d;
+        nextVent = { name: z.name, inMeters: d };
+      }
+    }
 
     return {
       remaining: Math.max(0, this.track.length - p.dist),
@@ -688,6 +700,8 @@ export class Race {
       rivals,
       nextClimb,
       nextSprint,
+      nextVent,
+      bordures: this.ventZoneEnCours ? { abrite: p.abrite } : null,
       jerseys: this.playerJerseys,
       stageType: this.stage.type,
       course: {
@@ -752,6 +766,35 @@ export class Race {
         }
       });
     });
+  }
+
+  /**
+   * Bordures : à l'entrée d'un secteur exposé au vent de côté, le peloton se
+   * scinde d'un coup. Chacun est réparti dans un groupe selon son profil
+   * (les rouleurs se placent mieux) — sauf le joueur, dont la place dépend de
+   * sa réaction au moment précis où ça casse : s'il pousse déjà fort, il
+   * suit le groupe de tête ; sinon il reste dans le vent, sans personne pour
+   * l'abriter, et le paie jusqu'à la fin du secteur.
+   */
+  private majBordures(): void {
+    const p = this.player;
+    const zone = this.track.ventZones.find((z) => p.dist >= z.from && p.dist <= z.to) ?? null;
+    if (zone && zone !== this.ventZoneEnCours) {
+      this.ventZoneEnCours = zone;
+      for (const r of this.riders) {
+        if (r === p || r.finished || this.tactics.état.echappee.includes(r.id)) continue;
+        const facteur = (r.stats.flat - 55) / 220;
+        const chance = Math.min(0.78, Math.max(0.22, 0.5 + facteur));
+        r.abrite = Math.random() < chance;
+      }
+      p.abrite = p.effort > 0.72 || p.boostTimer > 0 || p.standing > 0.5;
+      this.onEvent(
+        p.abrite ? 'Bordures ! Tu es bien placé, devant.' : 'Bordures ! Tu restes dans le vent.'
+      );
+    } else if (!zone && this.ventZoneEnCours) {
+      this.ventZoneEnCours = null;
+      for (const r of this.riders) r.abrite = true;
+    }
   }
 
   private finalize(): void {
@@ -822,6 +865,13 @@ export class Race {
       if (d > 0 && d < best) {
         best = d;
         nextMarker = { kind: 'pave', name: z.name, inMeters: d };
+      }
+    }
+    for (const z of this.track.ventZones) {
+      const d = z.from - p.dist;
+      if (d > 0 && d < best) {
+        best = d;
+        nextMarker = { kind: 'vent', name: z.name, inMeters: d };
       }
     }
 

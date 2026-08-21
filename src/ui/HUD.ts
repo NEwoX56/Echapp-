@@ -234,8 +234,8 @@ export class HUD {
       const m = s.nextMarker;
       const km = (m.inMeters / 1000).toFixed(1);
       e.marker.className = `hud-marker ${m.kind}`;
-      const label = m.kind === 'col' ? 'Col' : m.kind === 'sprint' ? 'Sprint' : 'Pavés';
-      e.marker.innerHTML = `<b>${label}</b> ${m.name} <span>dans ${km} km</span>`;
+      const labels = { col: 'Col', sprint: 'Sprint', pave: 'Pavés', vent: 'Vent' };
+      e.marker.innerHTML = `<b>${labels[m.kind]}</b> ${m.name} <span>dans ${km} km</span>`;
     } else {
       e.marker.classList.add('hidden');
     }

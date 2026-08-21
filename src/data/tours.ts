@@ -77,8 +77,10 @@ export const TOURS: TourDef[] = [
         displayKm: 122,
         seed: 84,
         profile: [[0, 10], [0.3, 6], [0.6, 12], [0.85, 7], [1, 8]],
-        description: 'Étape finale roulante. Dernière chance pour les sprinteurs.',
-        sprints: [{ at: 0.6, name: 'Sprint du Pic Corbeau' }]
+        description:
+          "Étape finale roulante. Dernière chance pour les sprinteurs, mais le plateau exposé du Pic Corbeau peut tout faire basculer avant l'arrivée.",
+        sprints: [{ at: 0.6, name: 'Sprint du Pic Corbeau' }],
+        vent: [{ from: 0.32, to: 0.48, name: 'Plateau du Pic Corbeau' }]
       }
     ]
   },
@@ -176,8 +178,10 @@ export const TOURS: TourDef[] = [
         displayKm: 108,
         seed: 190,
         profile: [[0, 5], [0.4, 8], [0.75, 4], [1, 6]],
-        description: 'Parade finale puis sprint massif sur la promenade.',
-        sprints: [{ at: 0.65, name: 'Sprint de Brumelac' }]
+        description:
+          "Parade finale puis sprint massif sur la promenade. Le front de mer, à découvert, met le peloton en bordures avant que ça ne se joue au sprint.",
+        sprints: [{ at: 0.65, name: 'Sprint de Brumelac' }],
+        vent: [{ from: 0.28, to: 0.46, name: 'Front de mer de Brumelac' }]
       }
     ]
   },
@@ -304,8 +308,10 @@ export const TOURS: TourDef[] = [
         displayKm: 116,
         seed: 296,
         profile: [[0, 18], [0.4, 22], [0.7, 16], [1, 20]],
-        description: 'Tour d\'honneur puis sprint final sur l\'avenue.',
-        sprints: [{ at: 0.7, name: 'Sprint de la Traversée' }]
+        description:
+          "Tour d'honneur puis sprint final sur l'avenue. La plaine ouverte, sans le moindre abri, peut scinder le peloton en bordures.",
+        sprints: [{ at: 0.7, name: 'Sprint de la Traversée' }],
+        vent: [{ from: 0.24, to: 0.4, name: 'Plaine ouverte de la Traversée' }]
       }
     ]
   }
@@ -336,11 +342,13 @@ export const TOURS: TourDef[] = [
         displayKm: 194,
         seed: 314,
         profile: [[0, 8], [0.3, 14], [0.6, 10], [0.9, 16], [1, 11]],
-        description: 'Longue étape de plat. Les sprinteurs se disputent le vert.',
+        description:
+          "Longue étape de plat. Les sprinteurs se disputent le vert, mais la ligne droite de Vensac, à découvert, peut casser la course avant l'heure.",
         sprints: [
           { at: 0.4, name: 'Sprint de Vensac' },
           { at: 0.75, name: 'Sprint de Brumelac' }
-        ]
+        ],
+        vent: [{ from: 0.5, to: 0.68, name: 'Ligne droite de Vensac' }]
       },
       {
         id: 'cou-3',

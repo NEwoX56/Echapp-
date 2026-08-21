@@ -16,6 +16,9 @@ export interface RadioContext {
   rivals: RivalInfo[];
   nextClimb: { name: string; inMeters: number; category: number; avgGrade: number } | null;
   nextSprint: { name: string; inMeters: number } | null;
+  nextVent: { name: string; inMeters: number } | null;
+  /** secteur de vent en cours, si le joueur y est */
+  bordures: { abrite: boolean } | null;
   /** maillots portés par le joueur */
   jerseys: ClassementKey[];
   stageType: string;
@@ -224,6 +227,24 @@ export class DirectorRadio {
           priority: 74
         });
       }
+    }
+
+    /* --- vent de côté à venir : le peloton risque de se scinder --- */
+    if (c.nextVent && c.nextVent.inMeters < 1400 && c.nextVent.inMeters > 250) {
+      if (this.once(`vent-${c.nextVent.name}`)) {
+        out.push({
+          text: `Vent de côté dans ${km(c.nextVent.inMeters)}. Ça va se scinder en bordures, mets-toi devant avant que ça casse.`,
+          tone: 'alerte',
+          priority: 84
+        });
+      }
+    }
+    if (c.bordures && !c.bordures.abrite && this.once('bordures-dehors')) {
+      out.push({
+        text: "Tu es resté dans le vent, sans personne pour t'abriter. Il va falloir revenir dans le groupe de tête.",
+        tone: 'alerte',
+        priority: 91
+      });
     }
 
     /* --- énergie --- */

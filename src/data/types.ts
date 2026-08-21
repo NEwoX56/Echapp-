@@ -30,6 +30,13 @@ export interface PaveDef {
   name: string;
 }
 
+/** secteur exposé au vent de côté : fractions 0..1 du parcours, risque de bordures */
+export interface VentDef {
+  from: number;
+  to: number;
+  name: string;
+}
+
 export interface StageDef {
   id: string;
   name: string;
@@ -50,6 +57,8 @@ export interface StageDef {
   meteo?: Meteo;
   /** secteurs pavés façon Paris-Roubaix */
   paves?: PaveDef[];
+  /** secteurs exposés au vent de côté : le peloton peut s'y scinder en bordures */
+  vent?: VentDef[];
 }
 
 export interface TourDef {

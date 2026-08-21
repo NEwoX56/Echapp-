@@ -41,6 +41,8 @@ export class Rider {
   standing = 0;
   /** vraie fringale : on n'en sort qu'en remontant l'énergie (hystérésis) */
   bonking = false;
+  /** dans les bordures : à l'abri (groupe de tête) ou laissé dans le vent */
+  abrite = true;
   /**
    * Réserve maximale. Le joueur reste à 100 ; les adversaires peuvent monter
    * au-delà dans les paliers de difficulté élevés, ce qui leur permet de
@@ -131,6 +133,8 @@ export class Rider {
     }
     // pavés : chaussée irrégulière, tout le monde ralentit et encaisse les secousses
     if (track.isPave(this.dist)) target *= 0.91;
+    // bordures : laissé dans le vent, sans abri, on paie plein pot
+    if (track.isVent(this.dist) && !this.abrite) target *= 0.87;
     if (this.drafting) target *= 1.05;
     if (fringale) target *= this.specialites.has('sang-froid') ? 0.89 : 0.8;
     if (this.boostTimer > 0) {

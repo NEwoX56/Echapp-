@@ -335,7 +335,8 @@ export class Game {
         appearance: s.appearance,
         jersey: this.career.playerJersey(),
         team: s.team,
-        jerseys: this.career.playerJerseys()
+        jerseys: this.career.playerJerseys(),
+        crevaisonFrequence: s.crevaisonFrequence
       },
       getRoster(),
       this.career.jerseyHolders(),

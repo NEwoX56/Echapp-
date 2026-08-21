@@ -984,6 +984,24 @@ export class Menu {
             s'efface avec la distance : de quoi reconnaître qui est autour de
             toi sans encombrer la route.
           </p>
+          <h3>Crevaisons</h3>
+          <div class="diff-row">
+            ${(
+              [
+                ['aucune', 'Aucune', 'jamais de crevaison'],
+                ['normale', 'Normale', 'comme aujourd\'hui'],
+                ['frequente', 'Fréquente', 'plus de casse mécanique']
+              ] as const
+            )
+              .map(
+                ([v, l, desc]) =>
+                  `<button class="diff-btn ${(this.career.save.crevaisonFrequence ?? 'normale') === v ? 'active' : ''}"
+                     data-crevaison="${v}">
+                     <span>${l}</span><small>${desc}</small>
+                   </button>`
+              )
+              .join('')}
+          </div>
         </div>
         <div class="perso-block">
           <h3>Affichage</h3>
@@ -1206,6 +1224,14 @@ export class Menu {
     this.root.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((b) => {
       b.addEventListener('click', () => {
         save.difficulty = b.dataset.difficulty as (typeof DIFFICULTES)[number]['id'];
+        this.career.persist();
+        this.render();
+      });
+    });
+
+    this.root.querySelectorAll<HTMLButtonElement>('[data-crevaison]').forEach((b) => {
+      b.addEventListener('click', () => {
+        save.crevaisonFrequence = b.dataset.crevaison as 'aucune' | 'normale' | 'frequente';
         this.career.persist();
         this.render();
       });

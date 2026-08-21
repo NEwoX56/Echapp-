@@ -150,6 +150,8 @@ export interface CareerSave {
   sonCoupe: boolean;
   /** afficher le nom des coureurs au-dessus de leur tête */
   nomsCoureurs: boolean;
+  /** fréquence des crevaisons en course. Par défaut 'normale' si absent */
+  crevaisonFrequence?: 'aucune' | 'normale' | 'frequente';
   /** compte de synchronisation entre appareils */
   syncId?: string;
   syncCode?: string;

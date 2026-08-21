@@ -113,6 +113,8 @@ interface PlayerConfig {
   team: string;
   /** maillots portés (pour les conseils) */
   jerseys: ClassementKey[];
+  /** fréquence des crevaisons choisie dans les réglages. Par défaut 'normale' */
+  crevaisonFrequence?: 'aucune' | 'normale' | 'frequente';
 }
 
 /** état du général avant l'étape, pour évaluer les menaces */
@@ -390,17 +392,27 @@ export class Race {
       /*
        * Crevaisons : au plus une pour le joueur, tirée au sort une fois pour
        * toutes au départ. Une ou deux dans le peloton, pour que la radio ait
-       * de quoi parler et que le classement ne soit jamais figé.
+       * de quoi parler et que le classement ne soit jamais figé. La
+       * fréquence de base (14 %) est réglable dans les paramètres.
        */
-      if (Math.random() < 0.14) {
+      const freqCrevaison = playerCfg.crevaisonFrequence ?? 'normale';
+      const multCrevaison = freqCrevaison === 'aucune' ? 0 : freqCrevaison === 'frequente' ? 2.3 : 1;
+      if (multCrevaison > 0 && Math.random() < 0.14 * multCrevaison) {
         this.crevaisonJoueurAt = 0.12 + Math.random() * 0.68;
       }
-      const candidats = this.riders.filter((r) => r !== this.player);
-      const nbBots = Math.random() < 0.45 ? 1 : Math.random() < 0.8 ? 2 : 0;
-      for (let i = 0; i < nbBots && candidats.length; i++) {
-        const idx = Math.floor(Math.random() * candidats.length);
-        const r = candidats.splice(idx, 1)[0];
-        this.crevaisonBots.set(r.id, 0.1 + Math.random() * 0.75);
+      if (multCrevaison > 0) {
+        const candidats = this.riders.filter((r) => r !== this.player);
+        const nbBots =
+          Math.random() < Math.min(1, 0.45 * multCrevaison)
+            ? 1
+            : Math.random() < Math.min(1, 0.8 * multCrevaison)
+              ? 2
+              : 0;
+        for (let i = 0; i < nbBots && candidats.length; i++) {
+          const idx = Math.floor(Math.random() * candidats.length);
+          const r = candidats.splice(idx, 1)[0];
+          this.crevaisonBots.set(r.id, 0.1 + Math.random() * 0.75);
+        }
       }
     } else {
       // contre-la-montre : adversaires en temps virtuels

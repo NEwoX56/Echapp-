@@ -43,6 +43,8 @@ export class Rider {
   bonking = false;
   /** dans les bordures : à l'abri (groupe de tête) ou laissé dans le vent */
   abrite = true;
+  /** angle de penché en virage, en radians (amorti d'une image à l'autre) */
+  private inclinaison = 0;
   /** temps restant de crevaison, en secondes (0 = pas de crevaison en cours) */
   crevaisonTimer = 0;
   /** fenêtre de relance après le changement de roue : on pousse plus fort pour revenir */
@@ -139,6 +141,18 @@ export class Rider {
     }
     // pavés : chaussée irrégulière, tout le monde ralentit et encaisse les secousses
     if (track.isPave(this.dist)) target *= 0.91;
+    /*
+     * Virages. On ne passe pas un lacet à la vitesse d'une ligne droite : la
+     * courbure impose un plafond de vitesse. Le coup de frein est anticipé un
+     * peu en avant, sinon on entrerait dans la courbe pleine balle avant de
+     * ralentir dedans. Les bons rouleurs négocient un peu mieux.
+     */
+    const kVirage = Math.abs(track.courbureAt(this.dist + 12));
+    if (kVirage > 0.004) {
+      const adresse = 0.9 + this.stats.flat / 500;
+      const plafond = Math.sqrt(9.81 * 0.85 * adresse / kVirage);
+      if (plafond < target) target = Math.max(target * 0.55, plafond);
+    }
     // bordures : laissé dans le vent, sans abri, on paie plein pot
     if (track.isVent(this.dist) && !this.abrite) target *= 0.87;
     if (this.drafting) target *= 1.05;
@@ -273,6 +287,20 @@ export class Rider {
     g.position.copy(this.pos);
     this.lookTarget.copy(this.pos).add(this.tan);
     g.lookAt(this.lookTarget);
+    /*
+     * Penché en virage. Un cycliste s'incline pour compenser la force
+     * centrifuge : l'angle vaut atan(v²·courbure / g). On le borne à une
+     * vingtaine de degrés — au-delà, à la vitesse et à l'échelle du jeu, le
+     * coureur aurait l'air couché — et on l'amortit pour que l'entrée et la
+     * sortie de courbe se fassent progressivement.
+     */
+    const cible = THREE.MathUtils.clamp(
+      Math.atan((this.speed * this.speed * track.courbureAt(this.dist)) / 9.81),
+      -0.38,
+      0.38
+    );
+    this.inclinaison += (cible - this.inclinaison) * Math.min(1, dt * 4.5);
+    g.rotateZ(this.inclinaison);
     this.visual.update(dt, this.speed, this.standing, this.effort, this.celebration);
   }
 

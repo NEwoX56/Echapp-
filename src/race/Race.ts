@@ -222,6 +222,8 @@ export class Race {
   private rain: Rain | null = null;
   private camPos = new THREE.Vector3();
   private camLook = new THREE.Vector3();
+  /** roulis de caméra en virage, amorti d'une image à l'autre */
+  private roulisCamera = 0;
   private tmp = new THREE.Vector3();
   private tan = new THREE.Vector3();
 
@@ -1131,6 +1133,18 @@ export class Race {
     return list.sort((a, b) => b.progress - a.progress);
   }
 
+  /**
+   * Point de la route à `avance` mètres devant, plutôt qu'un point projeté
+   * droit dans l'axe. Sur une route qui tourne, viser la tangente fait
+   * regarder la caméra à côté du virage — vers le décor — pile au moment où
+   * l'on voudrait voir où la route va.
+   */
+  private routeDevant(dist: number, avance: number): THREE.Vector3 {
+    const cible = new THREE.Vector3();
+    this.track.pose(Math.min(dist + avance, this.track.length + 40), 0, cible);
+    return cible;
+  }
+
   private updateCamera(dt: number, snap: boolean): void {
     const p = this.player;
 
@@ -1220,10 +1234,7 @@ export class Race {
           .clone()
           .add(this.tan.clone().multiplyScalar(1.15))
           .add(new THREE.Vector3(0, 1.42 - p.standing * 0.1, 0));
-        look = this.tmp
-          .clone()
-          .add(this.tan.clone().multiplyScalar(40))
-          .add(new THREE.Vector3(0, 1.2, 0));
+        look = this.routeDevant(d, 40).add(new THREE.Vector3(0, 1.2, 0));
         vitesseSuivi = 9;
         break;
       case 'tv':
@@ -1242,10 +1253,7 @@ export class Race {
           .clone()
           .add(this.tan.clone().multiplyScalar(-(22 + p.speed * 0.12)))
           .add(new THREE.Vector3(0, 16, 0));
-        look = this.tmp
-          .clone()
-          .add(this.tan.clone().multiplyScalar(14))
-          .add(new THREE.Vector3(0, 1, 0));
+        look = this.routeDevant(d, 14).add(new THREE.Vector3(0, 1, 0));
         vitesseSuivi = 2.2;
         break;
       default:
@@ -1254,10 +1262,7 @@ export class Race {
           .clone()
           .add(this.tan.clone().multiplyScalar(-(7.0 + p.speed * 0.11)))
           .add(new THREE.Vector3(0, 2.9 + p.standing * 0.18, 0));
-        look = this.tmp
-          .clone()
-          .add(this.tan.clone().multiplyScalar(10))
-          .add(new THREE.Vector3(0, 1.15, 0));
+        look = this.routeDevant(d, 10).add(new THREE.Vector3(0, 1.15, 0));
         vitesseSuivi = 3.5;
     }
     if (snap) {
@@ -1270,6 +1275,16 @@ export class Race {
     }
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.camLook);
+
+    /*
+     * Roulis de caméra en virage. Une fraction seulement du penché du
+     * coureur : assez pour qu'on sente la courbe, pas assez pour donner le
+     * mal de mer. Le drone, lui, reste à plat — c'est tout l'intérêt de la
+     * vue d'ensemble.
+     */
+    const roulis = this.cameraMode === 'aerial' ? 0 : this.track.courbureAt(d) * p.speed * p.speed * 0.010;
+    this.roulisCamera += (THREE.MathUtils.clamp(roulis, -0.16, 0.16) - this.roulisCamera) * Math.min(1, dt * 3.5);
+    if (Math.abs(this.roulisCamera) > 0.001) this.camera.rotateZ(this.roulisCamera);
 
     // secousses de caméra sur les pavés : petites vibrations haute fréquence
     if (this.track.isPave(d)) {

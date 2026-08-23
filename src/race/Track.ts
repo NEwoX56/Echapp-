@@ -76,6 +76,8 @@ export class Track {
   private merHorizon: THREE.Mesh | null = null;
   /** chaîne de sommets lointains : suit le coureur comme un décor de fond */
   private distantRange: THREE.Mesh | null = null;
+  /** courbure signée échantillonnée le long du parcours (voir courbureAt) */
+  private courbures = new Float32Array(0);
 
   private tmpP = new THREE.Vector3();
   private tmpT = new THREE.Vector3();
@@ -123,24 +125,9 @@ export class Track {
     }
     const rand = mulberry32(stage.seed);
 
-    const nPts = 40;
-    const segLen = stage.worldLength / nPts;
-    const pts: THREE.Vector3[] = [];
-    let x = 0;
-    let heading = 0;
-    // une route littorale épouse la côte : plus sinueuse, pour que la mer
-    // entre régulièrement dans le champ de la caméra au lieu de rester hors
-    // cadre sur les longues lignes droites
-    const sinuosite = this.coteMer !== 0 ? 1.7 : 1;
-    for (let i = 0; i <= nPts; i++) {
-      const t = i / nPts;
-      heading += (rand() - 0.5) * 0.55 * sinuosite;
-      heading *= 0.82;
-      x += Math.sin(heading) * segLen * 0.55;
-      pts.push(new THREE.Vector3(x, this.altitudeAtFraction(t), i * segLen));
-    }
-    this.curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.35);
+    this.curve = this.construireCourbe(stage, rand);
     this.length = this.curve.getLength();
+    this.construireTableCourbure();
 
     for (const c of stage.climbs ?? []) this.climbs.push({ ...c, dist: c.at * this.length });
     for (const s of stage.sprints ?? []) this.sprints.push({ ...s, dist: s.at * this.length });
@@ -171,6 +158,171 @@ export class Track {
     this.buildCrowds(rand);
     this.buildBanners();
     this.buildFinish();
+  }
+
+  /* ------------------------------------------------------------ */
+  /* tracé : de vrais virages, pas une ligne droite qui ondule     */
+  /* ------------------------------------------------------------ */
+
+  /**
+   * Construit le tracé de l'étape.
+   *
+   * L'ancien générateur intégrait un cap immédiatement rappelé vers zéro
+   * (`heading *= 0.82`) : la route ondulait de quelques degrés autour d'une
+   * ligne droite et ne tournait jamais vraiment. Ici le cap s'intègre
+   * librement le long d'une suite de virages tirés au sort — chacun avec son
+   * angle et sa longueur de développement — posés sur un fond de méandres
+   * doux. Un virage se voit arriver, se négocie, puis se referme.
+   *
+   * Le cap reste borné (CAP_MAX) : le parcours doit toujours progresser dans
+   * le même sens général. Une route qui se replierait franchement sur
+   * elle-même ferait se chevaucher deux tronçons de terrain, celui-ci étant
+   * construit comme un ruban paramétré par (distance, écart latéral).
+   */
+  private construireCourbe(stage: StageDef, rand: () => number): THREE.CatmullRomCurve3 {
+    const SEG = 14; // un point tous les 14 m : assez fin pour dessiner un virage
+    const n = Math.max(60, Math.round(stage.worldLength / SEG));
+    const CAP_MAX = 1.15; // ~66°, au-delà le tracé partirait en crabe
+
+    const virages = this.planifierVirages(stage, rand, n);
+
+    const pts: THREE.Vector3[] = [];
+    let heading = 0;
+    let x = 0;
+    let z = 0;
+    let vi = 0;
+    let restant = 0; // angle qu'il reste à balayer dans le virage en cours
+    let parSegment = 0;
+
+    for (let i = 0; i <= n; i++) {
+      pts.push(new THREE.Vector3(x, 0, z));
+
+      // ouverture d'un nouveau virage
+      if (restant === 0 && vi < virages.length && virages[vi].from <= i) {
+        const v = virages[vi++];
+        let angle = v.angle;
+        // un virage qui pousserait le cap au-delà de la limite est renvoyé
+        // dans l'autre sens : c'est ce qui crée les enchaînements gauche-droite
+        if (Math.abs(heading + angle) > CAP_MAX) angle = -angle;
+        restant = angle;
+        parSegment = angle / v.span;
+      }
+
+      if (restant !== 0) {
+        // on tourne franchement tant que le virage se développe
+        const pas = Math.abs(parSegment) >= Math.abs(restant) ? restant : parSegment;
+        heading += pas;
+        restant -= pas;
+        if (Math.abs(restant) < 1e-6) restant = 0;
+      } else {
+        // entre deux virages : méandres doux, plus marqués au bord de mer
+        const sinuosite = this.coteMer !== 0 ? 1.6 : 1;
+        heading += (rand() - 0.5) * 0.05 * sinuosite;
+        // rappel très lâche, qui ne s'exerce qu'aux grands écarts
+        if (Math.abs(heading) > CAP_MAX * 0.75) heading *= 0.97;
+      }
+
+      x += Math.sin(heading) * SEG;
+      z += Math.cos(heading) * SEG;
+    }
+
+    /*
+     * Une route qui tourne est plus longue qu'une route droite. Sans
+     * renormalisation, une étape de montagne bien sinueuse durerait beaucoup
+     * plus longtemps que le calibrage prévu (3 à 5 min). On ramène donc la
+     * longueur développée à worldLength, ce qui resserre aussi les rayons de
+     * virage dans les mêmes proportions.
+     */
+    const brute = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.35);
+    const k = stage.worldLength / Math.max(1, brute.getLength());
+    for (const p of pts) {
+      p.x *= k;
+      p.z *= k;
+    }
+
+    // l'altitude se pose à la fin, en fonction de l'avancement le long du tracé
+    const cumul: number[] = [0];
+    for (let i = 1; i < pts.length; i++) {
+      cumul.push(cumul[i - 1] + pts[i].distanceTo(pts[i - 1]));
+    }
+    const total = cumul[cumul.length - 1] || 1;
+    for (let i = 0; i < pts.length; i++) {
+      pts[i].y = this.altitudeAtFraction(cumul[i] / total);
+    }
+
+    return new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.35);
+  }
+
+  /**
+   * Répartit les virages de l'étape. Le profil décide de leur fréquence et de
+   * leur sévérité : une plaine enchaîne de grandes courbes rapides, une étape
+   * de montagne des virages serrés qu'il faut négocier.
+   */
+  private planifierVirages(
+    stage: StageDef,
+    rand: () => number,
+    n: number
+  ): { from: number; span: number; angle: number }[] {
+    const cfg = {
+      plaine: { tous: 24, angleMin: 0.22, angleMax: 0.6, spanMin: 4, spanMax: 8 },
+      vallonnee: { tous: 17, angleMin: 0.3, angleMax: 1.0, spanMin: 3, spanMax: 7 },
+      montagne: { tous: 12, angleMin: 0.45, angleMax: 1.5, spanMin: 2, spanMax: 6 },
+      clm: { tous: 26, angleMin: 0.2, angleMax: 0.55, spanMin: 4, spanMax: 9 }
+    }[stage.type];
+
+    const out: { from: number; span: number; angle: number }[] = [];
+    let i = 6;
+    let sens = rand() > 0.5 ? 1 : -1;
+    while (i < n - 6) {
+      const span = cfg.spanMin + Math.floor(rand() * (cfg.spanMax - cfg.spanMin + 1));
+      const angle = (cfg.angleMin + rand() * (cfg.angleMax - cfg.angleMin)) * sens;
+      out.push({ from: i, span, angle });
+      // alterner majoritairement gauche/droite donne des enchaînements lisibles
+      if (rand() < 0.72) sens = -sens;
+      i += span + Math.max(2, Math.round(cfg.tous * (0.5 + rand())));
+    }
+    return out;
+  }
+
+  /** pas d'échantillonnage de la table de courbure, en unités monde */
+  private static readonly PAS_COURBURE = 8;
+
+  /**
+   * Table de courbure signée le long du parcours. Elle sert au penché des
+   * coureurs, au roulis de la caméra et à la perte de vitesse en virage :
+   * autant de lectures par image, qu'on ne veut pas payer en échantillonnage
+   * de courbe à chaque fois.
+   */
+  private construireTableCourbure(): void {
+    const n = Math.ceil(this.length / Track.PAS_COURBURE) + 2;
+    this.courbures = new Float32Array(n);
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    const d = 7;
+    for (let i = 0; i < n; i++) {
+      const dist = i * Track.PAS_COURBURE;
+      const t0 = THREE.MathUtils.clamp((dist - d) / this.length, 0, 1);
+      const t1 = THREE.MathUtils.clamp((dist + d) / this.length, 0, 1);
+      const run = (t1 - t0) * this.length;
+      if (run < 0.001) continue;
+      this.curve.getTangentAt(t0, a);
+      this.curve.getTangentAt(t1, b);
+      let delta = Math.atan2(b.x, b.z) - Math.atan2(a.x, a.z);
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      this.courbures[i] = delta / run;
+    }
+  }
+
+  /** courbure signée en radians par unité ; positif = la route tourne à droite */
+  courbureAt(dist: number): number {
+    if (!this.courbures.length) return 0;
+    const x = THREE.MathUtils.clamp(dist / Track.PAS_COURBURE, 0, this.courbures.length - 1);
+    const i = Math.floor(x);
+    const f = x - i;
+    const a = this.courbures[i];
+    const b = this.courbures[Math.min(this.courbures.length - 1, i + 1)];
+    return a + (b - a) * f;
   }
 
   altitudeAtFraction(t: number): number {
@@ -783,10 +935,25 @@ export class Track {
     const totaleT = this.length + Track.DEGAGEMENT;
     for (let i = 0; i <= nLong; i++) {
       const dist = (i / nLong) * totaleT;
+      /*
+       * Bride de l'intérieur des virages. Le terrain est un ruban paramétré
+       * par (distance, écart latéral) : à l'intérieur d'une courbe de rayon R,
+       * les lignes d'écart se croisent dès que l'écart atteint R, et le
+       * maillage se replie sur lui-même. On borne donc l'écart intérieur bien
+       * avant ce rayon critique. Sans cette bride, tout virage un peu franc
+       * produisait des triangles retournés en travers de la route.
+       */
+      const kappa = this.courbureAt(Math.min(dist, this.length));
+      const rayon = Math.abs(kappa) > 1e-5 ? 1 / Math.abs(kappa) : Infinity;
+      const brideInterieur = Math.min(maxLat, rayon * 0.75);
+      const coteInterieur = kappa > 0 ? 1 : -1;
       for (let j = 0; j <= nLat; j++) {
         // répartition non linéaire : dense près de la route, large au loin
         const u = (j / nLat) * 2 - 1;
-        const lat = Math.sign(u) * Math.pow(Math.abs(u), 2.1) * maxLat;
+        let lat = Math.sign(u) * Math.pow(Math.abs(u), 2.1) * maxLat;
+        if (Math.sign(lat) === coteInterieur && Math.abs(lat) > brideInterieur) {
+          lat = coteInterieur * brideInterieur;
+        }
         const rel = this.reliefAt(dist, lat, seed);
         this.pose(dist, lat, p);
         const y = p.y + rel;
@@ -1198,6 +1365,26 @@ export class Track {
         to: Math.min(this.length, s.dist + 40),
         density: 0.7 * d
       });
+    }
+    /*
+     * Le public se masse dans les virages serrés : c'est là qu'on ralentit,
+     * qu'on voit les coureurs de près et qu'on les entend souffler. Les
+     * lacets noirs de monde sont l'image même d'une étape de montagne, et
+     * sans eux un virage bien dessiné reste une portion de route vide.
+     */
+    const pas = 12;
+    let debut = -1;
+    for (let dist = 0; dist <= this.length; dist += pas) {
+      const serre = Math.abs(this.courbureAt(dist)) > 0.011;
+      if (serre && debut < 0) debut = dist;
+      if ((!serre || dist + pas > this.length) && debut >= 0) {
+        z.push({
+          from: Math.max(0, debut - 35),
+          to: Math.min(this.length, dist + 35),
+          density: 0.8 * d
+        });
+        debut = -1;
+      }
     }
     return z;
   }

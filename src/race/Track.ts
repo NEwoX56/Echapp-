@@ -92,10 +92,15 @@ export class Track {
   decor!: Decor;
   /** horloge transmise au shader d'animation de la foule */
   private horlogeFoule: { value: number } | null = null;
+  /** position de la course transmise au shader : le public s'anime à son passage */
+  private positionCoureurFoule: { value: number } | null = null;
 
   /** fait vivre la foule ; à appeler à chaque image */
-  animer(dt: number): void {
+  animer(dt: number, distCourse?: number): void {
     if (this.horlogeFoule) this.horlogeFoule.value += dt;
+    if (this.positionCoureurFoule && distCourse !== undefined) {
+      this.positionCoureurFoule.value = distCourse;
+    }
   }
 
   constructor(
@@ -310,7 +315,16 @@ export class Track {
       let delta = Math.atan2(b.x, b.z) - Math.atan2(a.x, a.z);
       while (delta > Math.PI) delta -= Math.PI * 2;
       while (delta < -Math.PI) delta += Math.PI * 2;
-      this.courbures[i] = delta / run;
+      /*
+       * Signe. Le cap croît quand la direction tourne de +Z vers +X ; or le
+       * vecteur « droite » du jeu vaut (-tz, tx), soit -X quand on regarde
+       * vers +Z (voir pose). Un cap croissant est donc un virage à GAUCHE, et
+       * il faut inverser pour que la convention annoncée — positif = à droite
+       * — soit la bonne. Sans cette inversion les coureurs se penchaient à
+       * l'extérieur de la courbe, et la bride du terrain rognait le mauvais
+       * côté.
+       */
+      this.courbures[i] = -delta / run;
     }
   }
 
@@ -766,7 +780,9 @@ export class Track {
   private reliefScale(): number {
     switch (this.stage.type) {
       case 'montagne':
-        return 1;
+        // les sommets alentour montent bien plus haut que la route : c'est ce
+        // rapport, et non la pente, qui donne le sentiment d'être en altitude
+        return 1.45;
       case 'vallonnee':
         return 0.55;
       case 'clm':
@@ -808,8 +824,10 @@ export class Track {
      */
     if (this.coteVide !== 0 && Math.sign(lat) === this.coteVide) {
       const far = Math.min(1, (a - RISE_FROM) / 150);
-      const plancher = fbm(dist * 0.0016, a * 0.003, seed + 91) * 22;
-      return -(30 + far * (170 + plancher));
+      const plancher = fbm(dist * 0.0016, a * 0.003, seed + 91) * 28;
+      // le fond de vallée est loin en dessous : un vide peu profond se lit
+      // comme un talus, pas comme un à-pic
+      return -(42 + far * (290 + plancher));
     }
 
     /*
@@ -1045,7 +1063,7 @@ export class Track {
       const spread = (Math.PI * 2) / peaks;
       // chaque pic est un triangle large, légèrement en avant ou en arrière
       const r = R * (0.82 + rand() * 0.36);
-      const h = (140 + rand() * 300) * scale;
+      const h = (210 + rand() * 430) * scale;
       const half = spread * (0.75 + rand() * 0.7);
       const base = centre.y - 40;
 
@@ -1069,7 +1087,7 @@ export class Track {
       // pied gris-bleu (perspective atmosphérique), sommet enneigé
       c.copy(rock).lerp(far, 0.55 + rand() * 0.25);
       colors.push(c.r, c.g, c.b, c.r, c.g, c.b);
-      const snowy = h > 260 * scale;
+      const snowy = h > 330 * scale;
       c.copy(far);
       if (snowy) c.lerp(snow, 0.75);
       colors.push(c.r, c.g, c.b);
@@ -1454,24 +1472,49 @@ export class Track {
      * assemblée de gens.
      */
     const uTemps = { value: 0 };
+    const uCoureur = { value: -9999 };
     const animerFoule = (mat: THREE.MeshStandardMaterial, ampleur: number) => {
       mat.onBeforeCompile = (shader) => {
         shader.uniforms.uTemps = uTemps;
+        shader.uniforms.uCoureur = uCoureur;
         shader.vertexShader = shader.vertexShader
           .replace(
             '#include <common>',
             `#include <common>
              uniform float uTemps;
+             uniform float uCoureur;
              attribute float phase;
-             attribute float ferveur;`
+             attribute float ferveur;
+             attribute float jalon;`
           )
           .replace(
             '#include <begin_vertex>',
             `#include <begin_vertex>
+             /*
+              * Ferveur locale : le public s'enflamme quand la course lui
+              * arrive dessus, et retombe une fois qu'elle est passée. Un
+              * public qui s'agiterait autant à trois kilomètres de là ne
+              * regarderait rien du tout.
+              */
+             float ecart = jalon - uCoureur;
+             float venue = 1.0 - smoothstep(0.0, 70.0, abs(ecart));
+             /*
+              * On crie encore un moment derrière le peloton, jamais loin
+              * devant. Le facteur estDerriere est indispensable : sans lui
+              * la traînée valait son maximum pour tout public situé en
+              * AVAL, et la foule s'agitait déjà à un kilomètre de la course.
+              */
+             float estDerriere = step(ecart, 0.0);
+             float trainee = estDerriere * (1.0 - smoothstep(0.0, 130.0, -ecart)) * 0.45;
+             float chauffe = 0.3 + 1.5 * max(venue, trainee);
+             float f = ferveur * chauffe;
+
              float t = uTemps * 2.2 + phase * 6.283;
-             float saut = max(0.0, sin(t)) * ${ampleur.toFixed(3)} * ferveur;
-             float balance = sin(t * 0.5) * 0.09 * ferveur;
-             transformed.y += saut;
+             float saut = max(0.0, sin(t)) * ${ampleur.toFixed(3)} * f;
+             float balance = sin(t * 0.5) * 0.09 * f;
+             // les bras montent : le haut du corps s'étire quand ça hurle
+             float leve = max(0.0, position.y) * 0.34 * max(0.0, f - 0.75);
+             transformed.y += saut + leve;
              transformed.x += balance;`
           );
       };
@@ -1493,9 +1536,11 @@ export class Track {
     bodies.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(est * 3), 3);
     heads.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(est * 3), 3);
 
-    // phase et ferveur propres à chaque spectateur
+    // phase et ferveur propres à chaque spectateur, plus sa position sur le
+    // parcours : c'est elle qui lui dit quand le peloton arrive sur lui
     const phases = new Float32Array(est);
     const ferveurs = new Float32Array(est);
+    const jalons = new Float32Array(est);
 
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
@@ -1525,6 +1570,7 @@ export class Track {
       phases[n] = rand();
       // un tiers des spectateurs reste calme : tout le monde ne saute pas
       ferveurs[n] = rand() < 0.34 ? 0.15 + rand() * 0.2 : 0.7 + rand() * 0.5;
+      jalons[n] = dist;
       n++;
     };
 
@@ -1550,11 +1596,15 @@ export class Track {
 
     const attPhase = new THREE.InstancedBufferAttribute(phases, 1);
     const attFerveur = new THREE.InstancedBufferAttribute(ferveurs, 1);
+    const attJalon = new THREE.InstancedBufferAttribute(jalons, 1);
     bodyGeo.setAttribute('phase', attPhase);
     bodyGeo.setAttribute('ferveur', attFerveur);
+    bodyGeo.setAttribute('jalon', attJalon);
     headGeo.setAttribute('phase', attPhase);
     headGeo.setAttribute('ferveur', attFerveur);
+    headGeo.setAttribute('jalon', attJalon);
     this.horlogeFoule = uTemps;
+    this.positionCoureurFoule = uCoureur;
 
     bodies.count = n;
     heads.count = n;

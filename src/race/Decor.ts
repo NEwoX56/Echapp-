@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { StageDef, StageType } from '../data/types';
+import { conditionsDeEtape } from './Atmosphere';
 import type { BuildingKit } from './BuildingKit';
 import type { SceneryAssets, SceneryPiece } from '../core/SceneryAssets';
 
@@ -160,6 +161,8 @@ export class Decor {
   private readonly med: boolean;
   /** -1/1 = côté mer de la route (même tirage que Track), 0 = étape sans mer */
   private readonly coteMer: number;
+  /** étape courue de nuit : déclenche l'éclairage public sur tout le parcours */
+  private readonly nuit: boolean;
 
   constructor(
     piste: PisteDecor,
@@ -174,6 +177,7 @@ export class Decor {
     this.med = stage.biome === 'mediterraneen';
     // même formule que Track.ts : les deux doivent tomber d'accord sur le côté
     this.coteMer = stage.mer ? (stage.seed % 2 === 0 ? -1 : 1) : 0;
+    this.nuit = conditionsDeEtape(stage).periode === 'nuit';
     this.buildings = buildings?.available ? buildings : null;
     this.scenery = scenery?.hasAny ? scenery : null;
     this.zones = decouperZones(stage, rand);
@@ -210,10 +214,65 @@ export class Decor {
       }
     }
 
+    if (this.nuit) this.eclairageNuit();
     this.monuments(stage, rand);
     this.panneaux(stage, rand);
     this.bornes(stage);
     this.finaliser();
+  }
+
+  /**
+   * Éclairage public des étapes de nuit.
+   *
+   * Sans lui la route disparaissait purement et simplement : l'étape était
+   * injouable. Les têtes de lampadaire sont émissives plutôt que de vraies
+   * sources lumineuses — elles brillent, et le post-traitement leur donne un
+   * halo, sans qu'il faille payer une centaine de lumières dynamiques que le
+   * navigateur d'une console ne suivrait pas.
+   */
+  private eclairageNuit(): void {
+    const mats: Placement[] = [];
+    const bras: Placement[] = [];
+    const tetes: Placement[] = [];
+    const pas = 34 / Math.max(0.5, this.q.densiteDecor);
+    let side = 1;
+    for (let x = 0; x < this.piste.length; x += pas) {
+      const lat = side * 7.6;
+      const y = this.piste.groundAt(x, lat);
+      const rotY = this.capAt(x);
+      const un = new THREE.Vector3(1, 1, 1);
+      mats.push({ dist: x, lat, y, rotY, scale: un });
+      // potence : le bras se penche au-dessus de la chaussée
+      bras.push({ dist: x, lat: lat - side * 0.85, y: y + 6.15, rotY, scale: new THREE.Vector3(side, 1, 1) });
+      tetes.push({ dist: x, lat: lat - side * 1.7, y: y + 6.0, rotY, scale: un });
+      side = -side;
+    }
+    this.ajouter(
+      'lampadaire-nuit-mat',
+      () => new THREE.CylinderGeometry(0.09, 0.14, 6.3, 5).translate(0, 3.15, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x3a3f47, roughness: 0.6, metalness: 0.5 }),
+      mats
+    );
+    this.ajouter(
+      'lampadaire-nuit-bras',
+      () => new THREE.BoxGeometry(1.8, 0.1, 0.1).translate(-0.9, 0, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x3a3f47, roughness: 0.6, metalness: 0.5 }),
+      bras,
+      true
+    );
+    this.ajouter(
+      'lampadaire-nuit-tete',
+      () => new THREE.BoxGeometry(0.62, 0.16, 0.3),
+      () =>
+        new THREE.MeshStandardMaterial({
+          color: 0xffe6b0,
+          emissive: 0xffca6a,
+          emissiveIntensity: 2.6,
+          roughness: 0.4
+        }),
+      tetes,
+      true
+    );
   }
 
   /**

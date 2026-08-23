@@ -492,7 +492,7 @@ export class Race {
     const dt = this.phaseArrivee === 'course' ? dtBrut : dtBrut * this.ralenti;
     // le ciel dérive aussi pendant le décompte
     this.sky.update(dt);
-    this.track.animer(dt);
+    this.track.animer(dt, this.teteDeCourse());
     if (this.countdown > 0) {
       const avant = Math.ceil(this.countdown);
       this.countdown -= dt;
@@ -964,7 +964,7 @@ export class Race {
       r.celebration = snap.celebration;
       r.updateVisual(dt, this.track);
     }
-    this.track.animer(dt);
+    this.track.animer(dt, this.teteDeCourse());
     this.updateReplayCamera(frame);
   }
 
@@ -1139,6 +1139,13 @@ export class Race {
    * regarder la caméra à côté du virage — vers le décor — pile au moment où
    * l'on voudrait voir où la route va.
    */
+  /** distance de l'homme de tête : c'est son passage que le public salue */
+  private teteDeCourse(): number {
+    let d = this.player.dist;
+    for (const r of this.riders) if (r.dist > d) d = r.dist;
+    return d;
+  }
+
   private routeDevant(dist: number, avance: number): THREE.Vector3 {
     const cible = new THREE.Vector3();
     this.track.pose(Math.min(dist + avance, this.track.length + 40), 0, cible);

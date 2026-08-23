@@ -72,17 +72,25 @@ export function atmosphereDe(periode: Periode = 'jour', meteo: Meteo = 'sec'): R
       brumeMelange: 0.55
     };
   } else if (periode === 'nuit') {
+    /*
+     * Nuit « de retransmission », pas nuit noire. Les premiers réglages
+     * étaient photométriquement honnêtes mais injouables : on ne voyait plus
+     * la route du tout. Une étape nocturne est de toute façon éclairée — par
+     * la lune, les projecteurs de bord de route et l'éclairage public (voir
+     * Decor.eclairageNuit) — donc la chaussée doit rester lisible, la teinte
+     * bleutée suffisant à dire qu'il fait nuit.
+     */
     r = {
       ...r,
-      soleilCouleur: 0x93aad8,
-      soleilIntensite: 0.55,
+      soleilCouleur: 0xa8bde0,
+      soleilIntensite: 1.15,
       soleilPos: [22, 90, -12],
-      hemisphereCiel: 0x2b3550,
-      hemisphereSol: 0x121319,
-      hemisphereIntensite: 0.32,
-      fondIntensite: 0.12,
-      brumeTeinte: 0x151a2c,
-      brumeMelange: 0.6
+      hemisphereCiel: 0x53658f,
+      hemisphereSol: 0x2c3038,
+      hemisphereIntensite: 0.9,
+      fondIntensite: 0.34,
+      brumeTeinte: 0x27304a,
+      brumeMelange: 0.5
     };
   }
 
@@ -103,7 +111,20 @@ export function atmosphereDe(periode: Periode = 'jour', meteo: Meteo = 'sec'): R
     };
   }
 
-  return r;
+  /*
+   * Plancher de lisibilité.
+   *
+   * Les atténuations se cumulent : une étape de nuit sous la pluie voyait sa
+   * lumière réduite deux fois de suite et la chaussée virait au noir. Quelle
+   * que soit la combinaison, l'éclairage ne descend plus sous ce seuil — on
+   * doit toujours voir où l'on roule.
+   */
+  return {
+    ...r,
+    soleilIntensite: Math.max(r.soleilIntensite, 0.95),
+    hemisphereIntensite: Math.max(r.hemisphereIntensite, 0.72),
+    fondIntensite: Math.max(r.fondIntensite, 0.26)
+  };
 }
 
 /** couleur de brume finale : la teinte de base (par type d'étape) mélangée à la teinte d'ambiance */
@@ -145,7 +166,7 @@ function seededRand(seed: number): () => number {
  * des étapes tombait sur le réglage par défaut « jour, sec » et la météo
  * n'existait presque jamais en pratique, même si le système marchait.
  */
-export function atmosphereDeEtape(stage: StageDef): ReglagesAtmosphere {
+export function conditionsDeEtape(stage: StageDef): { periode: Periode; meteo: Meteo } {
   const rand = seededRand(stage.seed + 4001);
 
   let periode = stage.periode;
@@ -157,5 +178,10 @@ export function atmosphereDeEtape(stage: StageDef): ReglagesAtmosphere {
   if (!meteo) {
     meteo = rand() < 0.3 ? 'pluie' : 'sec';
   }
+  return { periode, meteo };
+}
+
+export function atmosphereDeEtape(stage: StageDef): ReglagesAtmosphere {
+  const { periode, meteo } = conditionsDeEtape(stage);
   return atmosphereDe(periode, meteo);
 }

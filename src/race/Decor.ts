@@ -32,7 +32,35 @@ export type ZoneType =
   | 'vignes'
   | 'littoral'
   /** champ en fleur : tournesols au nord, lavande au sud */
-  | 'fleurs';
+  | 'fleurs'
+  /** parc éolien : grandes turbines blanches qui tournent */
+  | 'eoliennes'
+  /** tunnel : on passe sous la roche, lumière coupée */
+  | 'tunnel'
+  /** château fort sur son promontoire */
+  | 'chateau'
+  /** zone industrielle : halles, silos, cheminées */
+  | 'industriel'
+  /** plateau aride : rocaille, buissons secs */
+  | 'desert'
+  /** marais : roselières, plans d'eau, pontons */
+  | 'marais'
+  /** oliveraie en terrasses */
+  | 'oliviers'
+  /** bocage : haies, prés clos, troupeaux */
+  | 'bocage'
+  /** station de montagne : chalets et remontées mécaniques */
+  | 'station'
+  /** verger en rangs */
+  | 'verger'
+  /** lac de barrage */
+  | 'lac'
+  /** gorges : parois rocheuses des deux côtés */
+  | 'gorges'
+  /** carrière : gradins de roche et engins */
+  | 'carriere'
+  /** aérodrome : hangars, manche à air */
+  | 'aerodrome';
 
 export interface Zone {
   from: number;
@@ -60,10 +88,23 @@ export interface ReglagesDecor {
 
 /** enchaînements plausibles selon le profil de l'étape */
 const REPERTOIRE: Record<StageType, ZoneType[]> = {
-  plaine: ['campagne', 'village', 'fleurs', 'vignes', 'ville', 'riviere', 'fleurs', 'campagne', 'littoral', 'village'],
-  vallonnee: ['campagne', 'foret', 'vignes', 'village', 'fleurs', 'riviere', 'campagne', 'foret', 'ville'],
-  montagne: ['foret', 'village', 'foret', 'sommet', 'riviere', 'sommet', 'foret', 'fleurs', 'campagne'],
-  clm: ['ville', 'campagne', 'fleurs', 'vignes', 'village', 'riviere', 'littoral', 'ville']
+  plaine: [
+    'campagne', 'village', 'fleurs', 'eoliennes', 'vignes', 'ville', 'riviere',
+    'bocage', 'fleurs', 'marais', 'campagne', 'verger', 'littoral', 'industriel',
+    'aerodrome', 'village'
+  ],
+  vallonnee: [
+    'campagne', 'foret', 'vignes', 'chateau', 'village', 'fleurs', 'riviere',
+    'bocage', 'campagne', 'oliviers', 'foret', 'lac', 'carriere', 'verger', 'ville'
+  ],
+  montagne: [
+    'foret', 'village', 'gorges', 'foret', 'sommet', 'tunnel', 'riviere',
+    'station', 'sommet', 'foret', 'lac', 'fleurs', 'desert', 'campagne'
+  ],
+  clm: [
+    'ville', 'campagne', 'fleurs', 'vignes', 'village', 'industriel', 'riviere',
+    'eoliennes', 'littoral', 'bocage', 'ville'
+  ]
 };
 
 export function decouperZones(stage: StageDef, rand: () => number): Zone[] {
@@ -147,6 +188,8 @@ interface Placement {
   y: number;
   scale: THREE.Vector3;
   rotY: number;
+  /** roulis autour de l'axe de la route ; sert aux pales d'éolienne */
+  rotZ?: number;
 }
 
 export class Decor {
@@ -215,6 +258,48 @@ export class Decor {
           break;
         case 'fleurs':
           this.champsFleuris(z, rand);
+          break;
+        case 'eoliennes':
+          this.parcEolien(z, rand);
+          break;
+        case 'tunnel':
+          this.tunnel(z, rand);
+          break;
+        case 'chateau':
+          this.forteresse(z, rand);
+          break;
+        case 'industriel':
+          this.industriel(z, rand);
+          break;
+        case 'desert':
+          this.plateauAride(z, rand);
+          break;
+        case 'marais':
+          this.marais(z, rand);
+          break;
+        case 'oliviers':
+          this.oliveraie(z, rand);
+          break;
+        case 'bocage':
+          this.bocage(z, rand);
+          break;
+        case 'station':
+          this.station(z, rand);
+          break;
+        case 'verger':
+          this.verger(z, rand);
+          break;
+        case 'lac':
+          this.lac(z, rand);
+          break;
+        case 'gorges':
+          this.gorges(z, rand);
+          break;
+        case 'carriere':
+          this.carriere(z, rand);
+          break;
+        case 'aerodrome':
+          this.aerodrome(z, rand);
           break;
         case 'sommet':
           this.hauteMontagne(z, rand);
@@ -355,9 +440,13 @@ export class Decor {
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
     const pos = new THREE.Vector3();
+    const qRoulis = new THREE.Quaternion();
+    const avant = new THREE.Vector3(0, 0, 1);
     places.forEach((p, i) => {
       this.piste.pose(p.dist, p.lat, pos);
       q.setFromAxisAngle(up, p.rotY);
+      // roulis facultatif, appliqué après le cap et donc autour de l'axe de l'objet
+      if (p.rotZ) q.multiply(qRoulis.setFromAxisAngle(avant, p.rotZ));
       m.compose(new THREE.Vector3(pos.x, pos.y + p.y, pos.z), q, p.scale);
       mesh.setMatrixAt(i, m);
     });
@@ -965,6 +1054,755 @@ export class Decor {
           side: THREE.DoubleSide
         }),
       corolles,
+      true
+    );
+  }
+
+  /* ---------------- paysages ajoutés ---------------- */
+
+  /** un vecteur d'échelle neutre, relu à chaque instance sans être conservé */
+  private static readonly UN = new THREE.Vector3(1, 1, 1);
+
+  /**
+   * Parc éolien. Les mâts se voient de très loin et donnent l'échelle du
+   * paysage : c'est ce qui rend une plaine autrement vide reconnaissable.
+   * Les pales sont figées à des angles différents d'une machine à l'autre —
+   * à la vitesse d'un coureur, la lecture est la même que si elles
+   * tournaient, sans avoir à animer une instance par image.
+   */
+  private parcEolien(z: Zone, rand: () => number): void {
+    const mats: Placement[] = [];
+    const nacelles: Placement[] = [];
+    const pales: Placement[] = [];
+    const pas = 95 / Math.max(0.4, this.q.densiteDecor);
+    for (let x = z.from; x < z.to; x += pas) {
+      for (const side of [-1, 1]) {
+        if (rand() < 0.35) continue;
+        const lat = side * (70 + rand() * 190);
+        const y = this.piste.groundAt(x, lat);
+        const h = 26 + rand() * 16;
+        const ech = new THREE.Vector3(1, h / 30, 1);
+        const rotY = rand() * 6.28;
+        mats.push({ dist: x, lat, y, rotY, scale: ech });
+        nacelles.push({ dist: x, lat, y: y + h, rotY, scale: Decor.UN });
+        // trois pales à 120°, calage propre à chaque machine
+        const cal = rand() * 2.1;
+        for (let k = 0; k < 3; k++) {
+          pales.push({
+            dist: x,
+            lat,
+            y: y + h,
+            rotY,
+            scale: new THREE.Vector3(1, 1, 1),
+            rotZ: cal + (k * Math.PI * 2) / 3
+          } as Placement);
+        }
+      }
+    }
+    const blanc = () => new THREE.MeshStandardMaterial({ color: 0xeef0f2, roughness: 0.55 });
+    this.ajouter('eol-mat', () => new THREE.CylinderGeometry(0.5, 1.1, 30, 8).translate(0, 15, 0), blanc, mats, true);
+    this.ajouter('eol-nacelle', () => new THREE.BoxGeometry(1.5, 1.3, 3.6), blanc, nacelles, true);
+    this.ajouter(
+      'eol-pale',
+      () => new THREE.BoxGeometry(0.5, 15, 0.16).translate(0, 7.5, 0),
+      blanc,
+      pales,
+      true
+    );
+  }
+
+  /**
+   * Tunnel. Le passage sous la roche coupe brutalement la lumière et le
+   * paysage : c'est le décor qui marque le plus une étape de montagne, parce
+   * qu'il change tout pendant quelques secondes au lieu de défiler à côté.
+   * La voûte est faite d'anneaux courts posés le long de la route, seule
+   * façon d'épouser une chaussée qui tourne.
+   */
+  private tunnel(z: Zone, rand: () => number): void {
+    void rand;
+    const anneaux: Placement[] = [];
+    const lampes: Placement[] = [];
+    const tetes: Placement[] = [];
+    const pas = 7;
+    for (let x = z.from; x < z.to; x += pas) {
+      const y = this.piste.groundAt(x, 0);
+      const rotY = this.capAt(x);
+      anneaux.push({ dist: x, lat: 0, y, rotY, scale: Decor.UN });
+      if (Math.round(x / pas) % 2 === 0) {
+        lampes.push({ dist: x, lat: 0, y: y + 6.2, rotY, scale: Decor.UN });
+        tetes.push({ dist: x, lat: 0, y: y + 6.05, rotY, scale: Decor.UN });
+      }
+    }
+    // tube ouvert : la moitié basse est enterrée sous la chaussée
+    this.ajouter(
+      'tunnel-voute',
+      () =>
+        new THREE.CylinderGeometry(7.2, 7.2, pas + 0.4, 14, 1, true).rotateX(Math.PI / 2),
+      () =>
+        new THREE.MeshStandardMaterial({
+          color: 0x4a4640,
+          roughness: 0.98,
+          side: THREE.BackSide,
+          flatShading: true
+        }),
+      anneaux
+    );
+    this.ajouter(
+      'tunnel-boitier',
+      () => new THREE.BoxGeometry(0.5, 0.18, 0.5),
+      () => new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.7 }),
+      lampes
+    );
+    this.ajouter(
+      'tunnel-lampe',
+      () => new THREE.BoxGeometry(0.42, 0.1, 0.42),
+      () =>
+        new THREE.MeshStandardMaterial({
+          color: 0xfff0c8,
+          emissive: 0xffcf7a,
+          emissiveIntensity: 3.2,
+          roughness: 0.4
+        }),
+      tetes
+    );
+  }
+
+  /** château fort sur son promontoire : un repère qu'on voit venir de loin */
+  private forteresse(z: Zone, rand: () => number): void {
+    const centre = (z.from + z.to) / 2;
+    const side = rand() > 0.5 ? 1 : -1;
+    const lat = side * (95 + rand() * 55);
+    const y = this.piste.groundAt(centre, lat);
+    if (!this.piste.constructible(centre, lat)) return;
+    const rotY = this.capAt(centre) + (rand() - 0.5);
+    const pierre = () =>
+      new THREE.MeshStandardMaterial({ color: 0x9c9382, roughness: 0.95, flatShading: true });
+    const ardoise = () =>
+      new THREE.MeshStandardMaterial({ color: 0x4a4f5c, roughness: 0.9, flatShading: true });
+
+    // donjon central
+    this.ajouter('ch-donjon', () => new THREE.BoxGeometry(11, 22, 11).translate(0, 11, 0), pierre, [
+      { dist: centre, lat, y, rotY, scale: Decor.UN }
+    ], true);
+    this.ajouter('ch-toit-donjon', () => new THREE.ConeGeometry(8.6, 9, 4).translate(0, 4.5, 0), ardoise, [
+      { dist: centre, lat, y: y + 22, rotY: rotY + Math.PI / 4, scale: Decor.UN }
+    ], true);
+
+    // quatre tours d'angle et la courtine qui les relie
+    const tours: Placement[] = [];
+    const toits: Placement[] = [];
+    const murs: Placement[] = [];
+    const R = 17;
+    for (let k = 0; k < 4; k++) {
+      const a = rotY + (k * Math.PI) / 2 + Math.PI / 4;
+      const dx = Math.sin(a) * R;
+      const dz = Math.cos(a) * R;
+      tours.push({ dist: centre + dz, lat: lat + dx, y, rotY, scale: Decor.UN });
+      toits.push({ dist: centre + dz, lat: lat + dx, y: y + 16, rotY, scale: Decor.UN });
+      const b = a + Math.PI / 4;
+      murs.push({
+        dist: centre + Math.cos(b) * R * 0.92,
+        lat: lat + Math.sin(b) * R * 0.92,
+        y,
+        rotY: b,
+        scale: Decor.UN
+      });
+    }
+    this.ajouter('ch-tour', () => new THREE.CylinderGeometry(3.4, 3.9, 16, 8).translate(0, 8, 0), pierre, tours, true);
+    this.ajouter('ch-toit-tour', () => new THREE.ConeGeometry(4.2, 6, 8).translate(0, 3, 0), ardoise, toits, true);
+    this.ajouter('ch-courtine', () => new THREE.BoxGeometry(2.2, 9, 24).translate(0, 4.5, 0), pierre, murs, true);
+  }
+
+  /** zone industrielle : halles, silos et cheminées en bord de route */
+  private industriel(z: Zone, rand: () => number): void {
+    const halles: Placement[] = [];
+    const toits: Placement[] = [];
+    const silos: Placement[] = [];
+    const chapeaux: Placement[] = [];
+    const cheminees: Placement[] = [];
+    const pas = 62 / Math.max(0.35, this.q.densiteDecor);
+    for (let x = z.from; x < z.to; x += pas) {
+      for (const side of [-1, 1]) {
+        if (rand() < 0.3) continue;
+        const lat = side * (26 + rand() * 34);
+        const y = this.piste.groundAt(x, lat);
+        const rotY = this.capAt(x) + (rand() - 0.5) * 0.3;
+        const tirage = rand();
+        if (tirage < 0.5) {
+          const ech = new THREE.Vector3(1 + rand() * 0.6, 0.8 + rand() * 0.5, 1 + rand() * 0.8);
+          halles.push({ dist: x, lat, y, rotY, scale: ech });
+          toits.push({ dist: x, lat, y: y + 7 * ech.y, rotY, scale: ech });
+        } else if (tirage < 0.85) {
+          for (let k = 0; k < 2 + Math.floor(rand() * 3); k++) {
+            const dl = (k - 1) * 5.4;
+            silos.push({ dist: x + dl * 0.2, lat: lat + dl, y, rotY, scale: Decor.UN });
+            chapeaux.push({ dist: x + dl * 0.2, lat: lat + dl, y: y + 13, rotY, scale: Decor.UN });
+          }
+        } else {
+          cheminees.push({ dist: x, lat, y, rotY, scale: new THREE.Vector3(1, 1 + rand() * 0.7, 1) });
+        }
+      }
+    }
+    this.ajouter(
+      'ind-halle',
+      () => new THREE.BoxGeometry(16, 7, 26).translate(0, 3.5, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x8d949c, roughness: 0.85, metalness: 0.25 }),
+      halles,
+      true
+    );
+    this.ajouter(
+      'ind-toit',
+      () => new THREE.CylinderGeometry(8.4, 8.4, 26, 10, 1, false, 0, Math.PI).rotateZ(Math.PI / 2),
+      () => new THREE.MeshStandardMaterial({ color: 0x6d747c, roughness: 0.8, metalness: 0.3 }),
+      toits,
+      true
+    );
+    this.ajouter(
+      'ind-silo',
+      () => new THREE.CylinderGeometry(2.4, 2.4, 13, 12).translate(0, 6.5, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0xd3d0c8, roughness: 0.7 }),
+      silos,
+      true
+    );
+    this.ajouter(
+      'ind-chapeau',
+      () => new THREE.ConeGeometry(2.7, 1.8, 12).translate(0, 0.9, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.6, metalness: 0.4 }),
+      chapeaux
+    );
+    this.ajouter(
+      'ind-cheminee',
+      () => new THREE.CylinderGeometry(1.1, 1.8, 30, 10).translate(0, 15, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0xb4665a, roughness: 0.92 }),
+      cheminees,
+      true
+    );
+  }
+
+  /** plateau aride : rocaille claire et buissons secs */
+  private plateauAride(z: Zone, rand: () => number): void {
+    const cailloux: Placement[] = [];
+    const buissons: Placement[] = [];
+    const pas = 9 / Math.max(0.35, this.q.densiteDecor);
+    for (let x = z.from; x < z.to; x += pas) {
+      for (const side of [-1, 1]) {
+        if (rand() < 0.42) continue;
+        const lat = side * (16 + rand() * 90);
+        const y = this.piste.groundAt(x, lat);
+        const s = 0.4 + rand() * 1.5;
+        const cible = rand() < 0.55 ? cailloux : buissons;
+        cible.push({
+          dist: x,
+          lat,
+          y,
+          rotY: rand() * 6.28,
+          scale: new THREE.Vector3(s, s * (0.5 + rand() * 0.6), s)
+        });
+      }
+    }
+    this.ajouter(
+      'ar-caillou',
+      () => new THREE.DodecahedronGeometry(1.1, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0xa89878, roughness: 1, flatShading: true }),
+      cailloux
+    );
+    this.ajouter(
+      'ar-buisson',
+      () => new THREE.IcosahedronGeometry(0.95, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x8a8556, roughness: 1, flatShading: true }),
+      buissons
+    );
+  }
+
+  /** marais : roselières, nappes d'eau sombres et pontons de bois */
+  private marais(z: Zone, rand: () => number): void {
+    const roseaux: Placement[] = [];
+    const nappes: Placement[] = [];
+    const pieux: Placement[] = [];
+    const pas = 5 / Math.max(0.35, this.q.densiteDecor);
+    for (let x = z.from; x < z.to; x += pas) {
+      for (const side of [-1, 1]) {
+        for (let k = 0; k < 3; k++) {
+          if (rand() < 0.45) continue;
+          const lat = side * (16 + k * 16 + rand() * 12);
+          const y = this.piste.groundAt(x, lat);
+          const s = 0.7 + rand() * 0.8;
+          roseaux.push({ dist: x, lat, y, rotY: rand() * 6.28, scale: new THREE.Vector3(s, s, s) });
+        }
+      }
+      if (rand() < 0.3) {
+        const side = rand() > 0.5 ? 1 : -1;
+        const lat = side * (30 + rand() * 45);
+        nappes.push({
+          dist: x,
+          lat,
+          y: this.piste.groundAt(x, lat) + 0.06,
+          rotY: rand() * 6.28,
+          scale: new THREE.Vector3(1 + rand(), 1, 1 + rand())
+        });
+      }
+      if (rand() < 0.12) {
+        const side = rand() > 0.5 ? 1 : -1;
+        const lat = side * (18 + rand() * 10);
+        pieux.push({ dist: x, lat, y: this.piste.groundAt(x, lat), rotY: 0, scale: Decor.UN });
+      }
+    }
+    this.ajouter(
+      'ma-roseau',
+      () => new THREE.ConeGeometry(0.5, 2.4, 4).translate(0, 1.2, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x7d8a4a, roughness: 1, flatShading: true }),
+      roseaux
+    );
+    this.ajouter(
+      'ma-eau',
+      () => new THREE.CircleGeometry(9, 12).rotateX(-Math.PI / 2),
+      () =>
+        new THREE.MeshStandardMaterial({
+          color: 0x2c4a52,
+          roughness: 0.25,
+          metalness: 0.1,
+          transparent: true,
+          opacity: 0.92
+        }),
+      nappes
+    );
+    this.ajouter(
+      'ma-pieu',
+      () => new THREE.CylinderGeometry(0.11, 0.13, 2.2, 5).translate(0, 1.1, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x6b5a42, roughness: 1 }),
+      pieux
+    );
+  }
+
+  /** oliveraie : troncs noueux et frondaisons gris-vert, en rangs larges */
+  private oliveraie(z: Zone, rand: () => number): void {
+    const troncs: Placement[] = [];
+    const frondaisons: Placement[] = [];
+    const pas = 9 / Math.max(0.35, this.q.densiteDecor);
+    for (let x = z.from; x < z.to; x += pas) {
+      for (const side of [-1, 1]) {
+        for (let k = 0; k < 5; k++) {
+          const lat = side * (17 + k * 11 + (rand() - 0.5) * 3);
+          const y = this.piste.groundAt(x, lat);
+          if (y > 90) continue;
+          const s = 0.85 + rand() * 0.4;
+          const rotY = rand() * 6.28;
+          troncs.push({ dist: x, lat, y, rotY, scale: new THREE.Vector3(s, s, s) });
+          frondaisons.push({ dist: x, lat, y: y + 1.7 * s, rotY, scale: new THREE.Vector3(s, s * 0.8, s) });
+        }
+      }
+    }
+    this.ajouter(
+      'ol-tronc',
+      () => new THREE.CylinderGeometry(0.22, 0.34, 1.9, 6).translate(0, 0.95, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x6e6152, roughness: 1 }),
+      troncs
+    );
+    this.ajouter(
+      'ol-frondaison',
+      () => new THREE.IcosahedronGeometry(1.5, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x7d8f6a, roughness: 1, flatShading: true }),
+      frondaisons,
+      true
+    );
+  }
+
+  /** bocage : haies vives fermant de petits prés, et des vaches dedans */
+  private bocage(z: Zone, rand: () => number): void {
+    const haies: Placement[] = [];
+    const vaches: Placement[] = [];
+    const pas = 4 / Math.max(0.35, this.q.densiteDecor);
+    // haies parallèles à la route, puis quelques-unes en travers
+    for (let x = z.from; x < z.to; x += pas) {
+      for (const side of [-1, 1]) {
+        for (const lat of [side * 17, side * 46, side * 82]) {
+          if (rand() < 0.12) continue;
+          haies.push({
+            dist: x,
+            lat,
+            y: this.piste.groundAt(x, lat),
+            rotY: this.capAt(x),
+            scale: new THREE.Vector3(1, 0.85 + rand() * 0.4, 1)
+          });
+        }
+      }
+    }
+    for (let x = z.from; x < z.to; x += 34 / Math.max(0.35, this.q.densiteDecor)) {
+      for (const side of [-1, 1]) {
+        for (let k = 0; k < 7; k++) {
+          const lat = side * (20 + k * 9);
+          haies.push({
+            dist: x,
+            lat,
+            y: this.piste.groundAt(x, lat),
+            rotY: this.capAt(x) + Math.PI / 2,
+            scale: new THREE.Vector3(1, 0.9, 1)
+          });
+        }
+      }
+      // le troupeau
+      if (rand() < 0.7) {
+        const side = rand() > 0.5 ? 1 : -1;
+        const n = 2 + Math.floor(rand() * 5);
+        for (let i = 0; i < n; i++) {
+          const lat = side * (24 + rand() * 45);
+          const d = x + (rand() - 0.5) * 26;
+          vaches.push({
+            dist: d,
+            lat,
+            y: this.piste.groundAt(d, lat),
+            rotY: rand() * 6.28,
+            scale: Decor.UN
+          });
+        }
+      }
+    }
+    this.ajouter(
+      'bo-haie',
+      () => new THREE.BoxGeometry(4.4, 1.8, 1.1).translate(0, 0.9, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x3f6b34, roughness: 1, flatShading: true }),
+      haies
+    );
+    this.ajouter(
+      'bo-vache',
+      () => new THREE.BoxGeometry(0.75, 0.85, 1.7).translate(0, 0.75, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0xe8e2d6, roughness: 0.95, flatShading: true }),
+      vaches,
+      true
+    );
+  }
+
+  /** station de montagne : chalets et remontées mécaniques */
+  private station(z: Zone, rand: () => number): void {
+    const chalets: Placement[] = [];
+    const toits: Placement[] = [];
+    const pylones: Placement[] = [];
+    const bras: Placement[] = [];
+    const pas = 26 / Math.max(0.35, this.q.densiteDecor);
+    for (let x = z.from; x < z.to; x += pas) {
+      for (const side of [-1, 1]) {
+        if (rand() < 0.35) continue;
+        const lat = side * (19 + rand() * 30);
+        const y = this.piste.groundAt(x, lat);
+        if (y > 120) continue;
+        const rotY = this.capAt(x) + (rand() - 0.5) * 0.6;
+        const s = 0.9 + rand() * 0.5;
+        const ech = new THREE.Vector3(s, s, s);
+        chalets.push({ dist: x, lat, y, rotY, scale: ech });
+        toits.push({ dist: x, lat, y: y + 4.2 * s, rotY, scale: ech });
+      }
+    }
+    // la ligne de pylônes grimpe le flanc, perpendiculairement à la route
+    const cote = rand() > 0.5 ? 1 : -1;
+    for (let k = 0; k < 7; k++) {
+      const d = z.from + 30 + k * 12;
+      const lat = cote * (40 + k * 34);
+      if (d > z.to) break;
+      const y = this.piste.groundAt(d, lat);
+      pylones.push({ dist: d, lat, y, rotY: 0, scale: Decor.UN });
+      bras.push({ dist: d, lat, y: y + 11.5, rotY: this.capAt(d) + Math.PI / 2, scale: Decor.UN });
+    }
+    this.ajouter(
+      'st-chalet',
+      () => new THREE.BoxGeometry(6.5, 4.2, 8).translate(0, 2.1, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.95, flatShading: true }),
+      chalets,
+      true
+    );
+    this.ajouter(
+      'st-toit',
+      () => new THREE.CylinderGeometry(4.6, 4.6, 8.6, 3).rotateZ(Math.PI / 2).translate(0, 1.4, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x3d4249, roughness: 0.9, flatShading: true }),
+      toits,
+      true
+    );
+    this.ajouter(
+      'st-pylone',
+      () => new THREE.CylinderGeometry(0.3, 0.45, 12, 6).translate(0, 6, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0xb9bec7, roughness: 0.5, metalness: 0.6 }),
+      pylones,
+      true
+    );
+    this.ajouter(
+      'st-bras',
+      () => new THREE.BoxGeometry(4.6, 0.28, 0.28),
+      () => new THREE.MeshStandardMaterial({ color: 0xb9bec7, roughness: 0.5, metalness: 0.6 }),
+      bras
+    );
+  }
+
+  /** verger : petits arbres fruitiers en quinconce régulier */
+  private verger(z: Zone, rand: () => number): void {
+    const troncs: Placement[] = [];
+    const houppiers: Placement[] = [];
+    const pas = 5.5 / Math.max(0.35, this.q.densiteDecor);
+    let rang = 0;
+    for (let x = z.from; x < z.to; x += pas, rang++) {
+      for (const side of [-1, 1]) {
+        for (let k = 0; k < 6; k++) {
+          const lat = side * (16 + k * 8 + (rang % 2) * 4);
+          const y = this.piste.groundAt(x, lat);
+          if (y > 90) continue;
+          const s = 0.8 + rand() * 0.25;
+          troncs.push({ dist: x, lat, y, rotY: 0, scale: new THREE.Vector3(s, s, s) });
+          houppiers.push({ dist: x, lat, y: y + 1.5 * s, rotY: rand() * 6.28, scale: new THREE.Vector3(s, s, s) });
+        }
+      }
+    }
+    this.ajouter(
+      've-tronc',
+      () => new THREE.CylinderGeometry(0.13, 0.18, 1.6, 5).translate(0, 0.8, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x6d5238, roughness: 1 }),
+      troncs
+    );
+    this.ajouter(
+      've-houppier',
+      () => new THREE.SphereGeometry(1.25, 7, 5),
+      () => new THREE.MeshStandardMaterial({ color: 0x4f8f42, roughness: 1, flatShading: true }),
+      houppiers,
+      true
+    );
+  }
+
+  /**
+   * Lac. La nappe commence au-delà de la portée du semis d'arbres de Track,
+   * sinon on verrait des troncs pousser au milieu de l'eau — le décor de zone
+   * et le semis général s'ignorent l'un l'autre.
+   */
+  private lac(z: Zone, rand: () => number): void {
+    const cote = rand() > 0.5 ? 1 : -1;
+    const nappes: Placement[] = [];
+    const roseaux: Placement[] = [];
+    const pontons: Placement[] = [];
+    for (let x = z.from; x < z.to; x += 26) {
+      const lat = cote * 190;
+      nappes.push({
+        dist: x,
+        lat,
+        y: this.piste.groundAt(x, lat) - 1.4,
+        rotY: this.capAt(x),
+        scale: Decor.UN
+      });
+      for (let k = 0; k < 5; k++) {
+        if (rand() < 0.4) continue;
+        const l = cote * (88 + rand() * 14);
+        const d = x + rand() * 26;
+        roseaux.push({
+          dist: d,
+          lat: l,
+          y: this.piste.groundAt(d, l),
+          rotY: rand() * 6.28,
+          scale: new THREE.Vector3(1, 0.8 + rand() * 0.6, 1)
+        });
+      }
+      if (rand() < 0.18) {
+        pontons.push({
+          dist: x,
+          lat: cote * 100,
+          y: this.piste.groundAt(x, cote * 100) + 0.4,
+          rotY: this.capAt(x) + Math.PI / 2,
+          scale: Decor.UN
+        });
+      }
+    }
+    this.ajouter(
+      'lc-eau',
+      () => new THREE.PlaneGeometry(230, 30).rotateX(-Math.PI / 2),
+      () =>
+        new THREE.MeshStandardMaterial({
+          color: 0x2f6f8a,
+          roughness: 0.18,
+          metalness: 0.15,
+          side: THREE.DoubleSide
+        }),
+      nappes
+    );
+    this.ajouter(
+      'lc-roseau',
+      () => new THREE.ConeGeometry(0.45, 2.1, 4).translate(0, 1.05, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x76854a, roughness: 1, flatShading: true }),
+      roseaux
+    );
+    this.ajouter(
+      'lc-ponton',
+      () => new THREE.BoxGeometry(2.2, 0.16, 11),
+      () => new THREE.MeshStandardMaterial({ color: 0x7a6446, roughness: 1 }),
+      pontons,
+      true
+    );
+  }
+
+  /** gorges : deux parois qui se resserrent sur la route */
+  private gorges(z: Zone, rand: () => number): void {
+    const parois: Placement[] = [];
+    const blocs: Placement[] = [];
+    const pas = 11 / Math.max(0.35, this.q.densiteDecor);
+    for (let x = z.from; x < z.to; x += pas) {
+      for (const side of [-1, 1]) {
+        const lat = side * (21 + rand() * 5);
+        const h = 16 + rand() * 26;
+        parois.push({
+          dist: x,
+          lat,
+          y: this.piste.groundAt(x, lat),
+          rotY: this.capAt(x) + (rand() - 0.5) * 0.25,
+          scale: new THREE.Vector3(1, h / 20, 1)
+        });
+        if (rand() < 0.3) {
+          const l = side * (15 + rand() * 4);
+          const s = 0.6 + rand() * 1.3;
+          blocs.push({
+            dist: x + rand() * pas,
+            lat: l,
+            y: this.piste.groundAt(x, l),
+            rotY: rand() * 6.28,
+            scale: new THREE.Vector3(s, s, s)
+          });
+        }
+      }
+    }
+    this.ajouter(
+      'go-paroi',
+      () => new THREE.BoxGeometry(7, 20, 12).translate(0, 10, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x746a5c, roughness: 1, flatShading: true }),
+      parois,
+      true
+    );
+    this.ajouter(
+      'go-bloc',
+      () => new THREE.DodecahedronGeometry(1.5, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x837868, roughness: 1, flatShading: true }),
+      blocs,
+      true
+    );
+  }
+
+  /** carrière : gradins de roche, tas de gravier et un engin */
+  private carriere(z: Zone, rand: () => number): void {
+    const cote = rand() > 0.5 ? 1 : -1;
+    const gradins: Placement[] = [];
+    const tas: Placement[] = [];
+    const engins: Placement[] = [];
+    for (let k = 0; k < 5; k++) {
+      for (let x = z.from; x < z.to; x += 16) {
+        gradins.push({
+          dist: x,
+          lat: cote * (34 + k * 15),
+          y: this.piste.groundAt(x, cote * (34 + k * 15)) + k * 4.5,
+          rotY: this.capAt(x),
+          scale: Decor.UN
+        });
+      }
+    }
+    for (let x = z.from; x < z.to; x += 40) {
+      if (rand() < 0.45) continue;
+      const lat = cote * (22 + rand() * 8);
+      const s = 1 + rand() * 1.4;
+      tas.push({
+        dist: x,
+        lat,
+        y: this.piste.groundAt(x, lat),
+        rotY: rand() * 6.28,
+        scale: new THREE.Vector3(s, s * 0.7, s)
+      });
+      if (rand() < 0.4) {
+        engins.push({
+          dist: x + 12,
+          lat: cote * 25,
+          y: this.piste.groundAt(x + 12, cote * 25),
+          rotY: this.capAt(x) + rand(),
+          scale: Decor.UN
+        });
+      }
+    }
+    this.ajouter(
+      'ca-gradin',
+      () => new THREE.BoxGeometry(14, 4.5, 17).translate(0, 2.25, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x9c9081, roughness: 1, flatShading: true }),
+      gradins,
+      true
+    );
+    this.ajouter(
+      'ca-tas',
+      () => new THREE.ConeGeometry(3.4, 4, 9),
+      () => new THREE.MeshStandardMaterial({ color: 0x8a8175, roughness: 1, flatShading: true }),
+      tas,
+      true
+    );
+    this.ajouter(
+      'ca-engin',
+      () => new THREE.BoxGeometry(2.6, 2.4, 5.2).translate(0, 1.2, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0xd8a72c, roughness: 0.75, metalness: 0.25 }),
+      engins,
+      true
+    );
+  }
+
+  /** aérodrome : hangars en berceau, manche à air et un avion léger */
+  private aerodrome(z: Zone, rand: () => number): void {
+    const cote = rand() > 0.5 ? 1 : -1;
+    const piste: Placement[] = [];
+    const hangars: Placement[] = [];
+    const manches: Placement[] = [];
+    const fuselages: Placement[] = [];
+    const ailes: Placement[] = [];
+    for (let x = z.from; x < z.to; x += 30) {
+      const lat = cote * 75;
+      piste.push({
+        dist: x,
+        lat,
+        y: this.piste.groundAt(x, lat) + 0.08,
+        rotY: this.capAt(x),
+        scale: Decor.UN
+      });
+    }
+    for (let x = z.from + 20; x < z.to; x += 70 / Math.max(0.4, this.q.densiteDecor)) {
+      const lat = cote * (34 + rand() * 12);
+      const y = this.piste.groundAt(x, lat);
+      const rotY = this.capAt(x);
+      hangars.push({ dist: x, lat, y, rotY, scale: new THREE.Vector3(1, 1, 1 + rand() * 0.5) });
+      if (rand() < 0.5) {
+        manches.push({ dist: x + 16, lat: cote * 26, y: this.piste.groundAt(x + 16, cote * 26), rotY, scale: Decor.UN });
+      }
+      if (rand() < 0.55) {
+        const d = x + 8;
+        const l = cote * 58;
+        const yy = this.piste.groundAt(d, l);
+        fuselages.push({ dist: d, lat: l, y: yy, rotY: rotY + rand() * 0.6, scale: Decor.UN });
+        ailes.push({ dist: d, lat: l, y: yy + 1.1, rotY: rotY + rand() * 0.6, scale: Decor.UN });
+      }
+    }
+    this.ajouter(
+      'ae-piste',
+      () => new THREE.BoxGeometry(26, 0.12, 32),
+      () => new THREE.MeshStandardMaterial({ color: 0x555a5f, roughness: 0.95 }),
+      piste
+    );
+    this.ajouter(
+      'ae-hangar',
+      () => new THREE.CylinderGeometry(6, 6, 15, 10, 1, false, 0, Math.PI).rotateZ(Math.PI / 2),
+      () => new THREE.MeshStandardMaterial({ color: 0xa9aeb4, roughness: 0.7, metalness: 0.35 }),
+      hangars,
+      true
+    );
+    this.ajouter(
+      'ae-manche',
+      () => new THREE.CylinderGeometry(0.07, 0.09, 7, 5).translate(0, 3.5, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0xcfd3d8, roughness: 0.6 }),
+      manches
+    );
+    this.ajouter(
+      'ae-fuselage',
+      () => new THREE.CapsuleGeometry(0.55, 4.4, 3, 7).rotateX(Math.PI / 2).translate(0, 1, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0xf0f2f4, roughness: 0.5 }),
+      fuselages,
+      true
+    );
+    this.ajouter(
+      'ae-aile',
+      () => new THREE.BoxGeometry(9.5, 0.16, 1.3),
+      () => new THREE.MeshStandardMaterial({ color: 0xe6e9ec, roughness: 0.5 }),
+      ailes,
       true
     );
   }

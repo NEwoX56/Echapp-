@@ -1,4 +1,4 @@
-import type { StageDef, TourDef, RiderStats } from '../data/types';
+import type { StageDef, TourDef, RiderStats, Periode, Meteo } from '../data/types';
 import type { Career } from '../career/Career';
 import { TOURS } from '../data/tours';
 import { getRoster, equipes } from '../data/rosterStore';
@@ -35,15 +35,22 @@ import { basculerFullscreen, fullscreenActif, fullscreenDisponible } from '../co
 import { qualityLabel } from '../core/Quality';
 import { DIFFICULTES } from '../data/difficulty';
 
-type Panel = 'tours' | 'classements' | 'atelier' | 'peloton' | 'progression' | 'params';
+type Panel = 'tours' | 'classements' | 'atelier' | 'peloton' | 'test' | 'progression' | 'params';
 type AtelierTab = 'coureur' | 'maillot' | 'velo';
 
 export class Menu {
   private root: HTMLElement;
   private career: Career;
   private onPlay: (stage: StageDef) => void;
+  private onTest: (stage: StageDef, seul: boolean) => void;
   private panel: Panel = 'tours';
   private atelierTab: AtelierTab = 'maillot';
+  /* ---- réglages de la séance libre (onglet Test) ---- */
+  private testTour = TOURS[0].id;
+  private testStage = TOURS[0].stages[0].id;
+  private testPeriode: 'auto' | Periode = 'auto';
+  private testMeteo: 'auto' | Meteo = 'auto';
+  private testSeul = false;
   private classementTab: ClassementKey = 'general';
   private preview = new RiderPreview();
   private editeur: RosterEditor;
@@ -77,10 +84,16 @@ export class Menu {
       : "La synchronisation n'est pas active sur cette adresse. Utilise la sauvegarde par fichier de l'onglet Peloton.";
   }
 
-  constructor(root: HTMLElement, career: Career, onPlay: (stage: StageDef) => void) {
+  constructor(
+    root: HTMLElement,
+    career: Career,
+    onPlay: (stage: StageDef) => void,
+    onTest: (stage: StageDef, seul: boolean) => void
+  ) {
     this.root = root;
     this.career = career;
     this.onPlay = onPlay;
+    this.onTest = onTest;
     this.editeur = new RosterEditor(root, () => this.render());
   }
 
@@ -107,6 +120,7 @@ export class Menu {
       classements: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V9"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/></svg>`,
       atelier: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3.5a5 5 0 0 0-5.6 6.7L3 16.6 6.4 20l6.4-6.4A5 5 0 0 0 19.5 8l-3 3-2.5-2.5 3-3A5 5 0 0 0 15 3.5Z"/></svg>`,
       peloton: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9.5" r="2.4"/><path d="M2.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M15 19c0-2.4 1.6-4 3.5-4S22 16.6 22 19"/></svg>`,
+      test: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6.2L4.8 18a2 2 0 0 0 1.7 3h11a2 2 0 0 0 1.7-3L14 9.2V3"/><path d="M7.4 14h9.2"/></svg>`,
       progression: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5.5-5.5 3.5 3.5L21 6"/><path d="M15 6h6v6"/></svg>`,
       params: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 14.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.7 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9.1A1.7 1.7 0 0 0 10.13 3V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.04A1.7 1.7 0 0 0 21 10.1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1.03Z"/></svg>`
     };
@@ -116,6 +130,7 @@ export class Menu {
       ['classements', 'Classements'],
       ['atelier', 'Atelier'],
       ['peloton', 'Peloton'],
+      ['test', 'Test'],
       ['progression', 'Progression']
     ];
 
@@ -191,6 +206,8 @@ export class Menu {
         return `<div class="panel-dense">${this.renderClassement()}</div>`;
       case 'peloton':
         return `<div class="panel-dense">${this.editeur.render()}</div>`;
+      case 'test':
+        return `<div class="panel-dense">${this.renderTest()}</div>`;
       case 'progression':
         return `<div class="panel-dense">${this.renderProgression()}</div>`;
       default:
@@ -876,6 +893,106 @@ export class Menu {
   /* onglet Paramètres                                         */
   /* --------------------------------------------------------- */
 
+  /* --------------------------------------------------------- */
+  /* onglet Test : rouler n'importe où, sans conséquence         */
+  /* --------------------------------------------------------- */
+
+  /**
+   * Séance libre. On y choisit n'importe quelle étape du jeu — y compris
+   * celles d'un tour non débloqué — et l'on force l'heure et la météo, ce que
+   * la carrière ne permet pas : elles y sont fixées par l'étape. Rien de ce
+   * qui s'y passe n'est enregistré, c'est un terrain d'essai.
+   */
+  private renderTest(): string {
+    const tour = TOURS.find((t) => t.id === this.testTour) ?? TOURS[0];
+    const etape = tour.stages.find((s) => s.id === this.testStage) ?? tour.stages[0];
+
+    const chips = (
+      valeurs: readonly (readonly [string, string])[],
+      actif: string,
+      attr: string
+    ) =>
+      valeurs
+        .map(
+          ([v, l]) =>
+            `<button class="chip ${actif === v ? 'active' : ''}" data-${attr}="${v}">${l}</button>`
+        )
+        .join('');
+
+    return `
+      <div class="panel-params">
+        <div class="perso-block">
+          <h3>Séance libre <small>rien n'est enregistré</small></h3>
+          <p class="hint">
+            Roule sur n'importe quelle étape, même celles que ta carrière n'a
+            pas encore débloquées, avec l'heure et la météo que tu veux. Ni
+            classement, ni expérience, ni contrat : de quoi reconnaître un
+            parcours ou t'entraîner à un final. <b>Échap</b> (ou <b>B</b> à la
+            manette) pour revenir au menu à tout moment.
+          </p>
+        </div>
+
+        <div class="perso-block">
+          <h3>Épreuve</h3>
+          <div class="chip-row">
+            ${chips(TOURS.map((t) => [t.id, t.name] as const), tour.id, 'test-tour')}
+          </div>
+          <h3>Étape</h3>
+          <div class="chip-row">
+            ${chips(
+              tour.stages.map((s) => [s.id, `${TYPE_LABEL[s.type]} · ${s.name}`] as const),
+              etape.id,
+              'test-etape'
+            )}
+          </div>
+          <p class="hint">${etape.description}</p>
+        </div>
+
+        <div class="perso-block">
+          <h3>Conditions</h3>
+          <div class="chip-row">
+            ${chips(
+              [
+                ['auto', "Heure de l'étape"],
+                ['jour', 'Plein jour'],
+                ['aube', 'Aube'],
+                ['crepuscule', 'Crépuscule'],
+                ['nuit', 'Nuit']
+              ] as const,
+              this.testPeriode,
+              'test-periode'
+            )}
+          </div>
+          <div class="chip-row">
+            ${chips(
+              [
+                ['auto', "Météo de l'étape"],
+                ['sec', 'Sec'],
+                ['pluie', 'Pluie']
+              ] as const,
+              this.testMeteo,
+              'test-meteo'
+            )}
+          </div>
+          <div class="chip-row">
+            ${chips(
+              [
+                ['peloton', 'Avec le peloton'],
+                ['seul', 'Seul sur la route']
+              ] as const,
+              this.testSeul ? 'seul' : 'peloton',
+              'test-adv'
+            )}
+          </div>
+        </div>
+
+        <button class="btn-primary grand" data-action="test-rouler">
+          Rouler
+          <small>${etape.name} · ${etape.displayKm} km</small>
+        </button>
+      </div>`;
+  }
+
   private renderParams(): string {
     const d = this.career.save.difficulty;
     const btn = (val: string, label: string, desc: string) => `
@@ -1227,6 +1344,53 @@ export class Menu {
         this.career.persist();
         this.render();
       });
+    });
+
+    /* ---- onglet Test ---- */
+    this.root.querySelectorAll<HTMLButtonElement>('[data-test-tour]').forEach((b) => {
+      b.addEventListener('click', () => {
+        this.testTour = b.dataset.testTour!;
+        // changer d'épreuve remet sur sa première étape
+        this.testStage = (TOURS.find((t) => t.id === this.testTour) ?? TOURS[0]).stages[0].id;
+        this.render();
+      });
+    });
+    this.root.querySelectorAll<HTMLButtonElement>('[data-test-etape]').forEach((b) => {
+      b.addEventListener('click', () => {
+        this.testStage = b.dataset.testEtape!;
+        this.render();
+      });
+    });
+    this.root.querySelectorAll<HTMLButtonElement>('[data-test-periode]').forEach((b) => {
+      b.addEventListener('click', () => {
+        this.testPeriode = b.dataset.testPeriode as 'auto' | Periode;
+        this.render();
+      });
+    });
+    this.root.querySelectorAll<HTMLButtonElement>('[data-test-meteo]').forEach((b) => {
+      b.addEventListener('click', () => {
+        this.testMeteo = b.dataset.testMeteo as 'auto' | Meteo;
+        this.render();
+      });
+    });
+    this.root.querySelectorAll<HTMLButtonElement>('[data-test-adv]').forEach((b) => {
+      b.addEventListener('click', () => {
+        this.testSeul = b.dataset.testAdv === 'seul';
+        this.render();
+      });
+    });
+    q<HTMLButtonElement>('[data-action="test-rouler"]')?.addEventListener('click', () => {
+      const tour = TOURS.find((t) => t.id === this.testTour) ?? TOURS[0];
+      const base = tour.stages.find((s) => s.id === this.testStage) ?? tour.stages[0];
+      /*
+       * L'heure et la météo sont des champs de l'étape : les forcer revient à
+       * passer une copie modifiée. Rien à câbler jusqu'au moteur, tout ce qui
+       * les lit part déjà de la définition d'étape.
+       */
+      const stage: StageDef = { ...base };
+      if (this.testPeriode !== 'auto') stage.periode = this.testPeriode;
+      if (this.testMeteo !== 'auto') stage.meteo = this.testMeteo;
+      this.onTest(stage, this.testSeul);
     });
 
     this.root.querySelectorAll<HTMLButtonElement>('[data-crevaison]').forEach((b) => {

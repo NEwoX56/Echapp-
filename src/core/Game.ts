@@ -42,6 +42,8 @@ export class Game {
 
   private state: GameState = 'menu';
   private race: Race | null = null;
+  /** séance libre de l'onglet Test : aucun résultat n'est appliqué à la carrière */
+  private modeLibre = false;
 
   private menuEl = document.getElementById('screen-menu')!;
   private hudEl = document.getElementById('screen-hud')!;
@@ -156,7 +158,12 @@ export class Game {
         this.menu.render();
       }
     );
-    this.menu = new Menu(this.menuEl, this.career, (stage) => this.ouvrirBriefing(stage));
+    this.menu = new Menu(
+      this.menuEl,
+      this.career,
+      (stage) => this.ouvrirBriefing(stage),
+      (stage, seul) => this.startRace(stage, { libre: true, seul })
+    );
     // après chaque reconstruction du menu, le curseur doit retrouver sa place
     this.menu.onRendered = () => this.navMenu.rafraichir();
     this.menu.onQualityChange = () => this.refreshQuality();
@@ -185,6 +192,10 @@ export class Game {
   private handleGlobalKeys(): void {
     if (this.input.toggleFullscreen) {
       void basculerFullscreen();
+    }
+    // une séance libre se quitte quand on veut : elle n'a rien à conclure
+    if (this.modeLibre && this.state === 'race' && this.input.back) {
+      this.quitterSeanceLibre();
     }
   }
 
@@ -302,7 +313,8 @@ export class Game {
     this.navBriefing.rafraichir();
   }
 
-  private startRace(stage: StageDef): void {
+  private startRace(stage: StageDef, libre?: { libre: boolean; seul: boolean }): void {
+    this.modeLibre = libre?.libre === true;
     // Le lancement part d'un clic ou d'un appui : c'est le geste utilisateur
     // exigé par l'API. Passer en plein écran ici rend la manette au jeu sur
     // les navigateurs de console, où l'interface du navigateur intercepte
@@ -338,7 +350,7 @@ export class Game {
         jerseys: this.career.playerJerseys(),
         crevaisonFrequence: s.crevaisonFrequence
       },
-      getRoster(),
+      libre?.seul ? [] : getRoster(),
       this.career.jerseyHolders(),
       this.career.gcSnapshot(),
       this.assets,
@@ -380,6 +392,15 @@ export class Game {
 
   private endRace(): void {
     if (!this.race) return;
+    /*
+     * Séance libre : on ne passe pas par l'écran de résultats, qui applique
+     * les temps, l'expérience, les maillots et le contrat à la carrière. Rien
+     * de ce qui se joue ici ne doit y laisser de trace.
+     */
+    if (this.modeLibre) {
+      this.quitterSeanceLibre();
+      return;
+    }
     const rows = this.race.getResults();
     const points = this.race.getPoints();
     const stage = this.race.stage;
@@ -420,6 +441,14 @@ export class Game {
       .addEventListener('click', () => this.setState('results'));
     this.race.startReplay();
     this.setState('replay');
+  }
+
+  /** retour au menu depuis une séance libre, à l'arrivée ou sur abandon */
+  private quitterSeanceLibre(): void {
+    this.modeLibre = false;
+    this.disposeRace();
+    this.music.jouer('menu');
+    this.showMenu();
   }
 
   private disposeRace(): void {

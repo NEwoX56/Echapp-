@@ -30,7 +30,9 @@ export type ZoneType =
   | 'riviere'
   | 'sommet'
   | 'vignes'
-  | 'littoral';
+  | 'littoral'
+  /** champ en fleur : tournesols au nord, lavande au sud */
+  | 'fleurs';
 
 export interface Zone {
   from: number;
@@ -58,10 +60,10 @@ export interface ReglagesDecor {
 
 /** enchaînements plausibles selon le profil de l'étape */
 const REPERTOIRE: Record<StageType, ZoneType[]> = {
-  plaine: ['campagne', 'village', 'vignes', 'ville', 'riviere', 'campagne', 'littoral', 'village'],
-  vallonnee: ['campagne', 'foret', 'vignes', 'village', 'riviere', 'campagne', 'foret', 'ville'],
-  montagne: ['foret', 'village', 'foret', 'sommet', 'riviere', 'sommet', 'foret', 'campagne'],
-  clm: ['ville', 'campagne', 'vignes', 'village', 'riviere', 'littoral', 'ville']
+  plaine: ['campagne', 'village', 'fleurs', 'vignes', 'ville', 'riviere', 'fleurs', 'campagne', 'littoral', 'village'],
+  vallonnee: ['campagne', 'foret', 'vignes', 'village', 'fleurs', 'riviere', 'campagne', 'foret', 'ville'],
+  montagne: ['foret', 'village', 'foret', 'sommet', 'riviere', 'sommet', 'foret', 'fleurs', 'campagne'],
+  clm: ['ville', 'campagne', 'fleurs', 'vignes', 'village', 'riviere', 'littoral', 'ville']
 };
 
 export function decouperZones(stage: StageDef, rand: () => number): Zone[] {
@@ -189,9 +191,12 @@ export class Decor {
         case 'ville':
           this.batir(z, rand, true);
           this.lampadaires(z, rand);
+          // rond-point d'entrée d'agglomération
+          this.rondPoint(z.from + 24 + rand() * 40, rand);
           break;
         case 'village':
           this.batir(z, rand, false);
+          if (rand() < 0.5) this.rondPoint(z.from + 20 + rand() * 30, rand);
           break;
         case 'foret':
           this.bosquet(z, rand);
@@ -207,6 +212,9 @@ export class Decor {
           break;
         case 'littoral':
           this.littoral(z, rand);
+          break;
+        case 'fleurs':
+          this.champsFleuris(z, rand);
           break;
         case 'sommet':
           this.hauteMontagne(z, rand);
@@ -312,8 +320,8 @@ export class Decor {
 
   /** construit un lot d'instances par type d'objet accumulé */
   private finaliser(): void {
-    for (const lot of this.lots.values()) {
-      this.instancier(lot.geo(), lot.mat(), lot.places, lot.ombre, lot.partage);
+    for (const [cle, lot] of this.lots) {
+      this.instancier(lot.geo(), lot.mat(), lot.places, lot.ombre, lot.partage, cle);
     }
     this.lots.clear();
   }
@@ -331,7 +339,8 @@ export class Decor {
     mat: THREE.Material,
     places: Placement[],
     ombre = false,
-    partage = false
+    partage = false,
+    cle = ''
   ): void {
     /*
      * Point de passage unique de tout le décor : c'est ici qu'on écarte ce qui
@@ -341,6 +350,7 @@ export class Decor {
     places = places.filter((p) => this.piste.constructible(p.dist, p.lat));
     if (!places.length) return;
     const mesh = new THREE.InstancedMesh(geo, mat, places.length);
+    mesh.name = cle;
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const up = new THREE.Vector3(0, 1, 0);
@@ -414,6 +424,89 @@ export class Decor {
    * BUILDING_FACE_OFFSET + PI fait l'inverse pour side>0.
    */
   private static readonly BUILDING_FACE_OFFSET = 0;
+
+  /**
+   * Rond-point à l'entrée d'une agglomération.
+   *
+   * Le peloton ne fait pas le tour de l'îlot : il le longe, comme sur une
+   * vraie course où la route se dédouble un instant. L'îlot planté et son
+   * ouvrage central sont un repère fort — on sait qu'on entre dans une ville
+   * avant même d'en voir les immeubles.
+   */
+  private rondPoint(dist: number, rand: () => number): void {
+    const cote = rand() > 0.5 ? 1 : -1;
+    const lat = cote * 15.5;
+    const y = this.piste.groundAt(dist, lat);
+    if (!this.piste.constructible(dist, lat)) return;
+    const rotY = this.capAt(dist);
+    /*
+     * Rayon fixe : tous les ronds-points de l'étape partagent alors la même
+     * géométrie et se regroupent dans un seul lot d'instances. Un rayon tiré
+     * au sort obligerait à une géométrie — donc un appel de rendu — par
+     * rond-point, pour une variation que personne ne remarque en roulant.
+     * L'échelle, elle, reste libre.
+     */
+    const RAYON = 6;
+    const ech = 0.9 + rand() * 0.35;
+    const un = new THREE.Vector3(ech, ech, ech);
+
+    this.ajouter(
+      'rp-ilot',
+      () => new THREE.CylinderGeometry(RAYON, RAYON + 0.35, 0.5, 18).translate(0, 0.25, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x6f9350, roughness: 1 }),
+      [{ dist, lat, y, rotY, scale: un }]
+    );
+    // bordure de trottoir claire, qui détache l'îlot de la chaussée
+    this.ajouter(
+      'rp-bordure',
+      () => new THREE.TorusGeometry(RAYON + 0.3, 0.22, 5, 20).rotateX(Math.PI / 2),
+      () => new THREE.MeshStandardMaterial({ color: 0xdedad0, roughness: 0.8 }),
+      [{ dist, lat, y: y + 0.42 * ech, rotY, scale: un }]
+    );
+    // ouvrage central : stèle, ou bosquet selon le tirage
+    if (rand() < 0.55) {
+      this.ajouter(
+        'rp-stele',
+        () => new THREE.ConeGeometry(0.9, 4.6, 6).translate(0, 2.3, 0),
+        () => new THREE.MeshStandardMaterial({ color: 0xb8b2a4, roughness: 0.9, flatShading: true }),
+        [{ dist, lat, y: y + 0.5 * ech, rotY, scale: un }],
+        true
+      );
+    } else {
+      const piece = this.scenery?.getRandom('treeBroadleaf', rand);
+      const place = { dist, lat, y: y + 0.5 * ech, rotY, scale: new THREE.Vector3(1.3, 1.3, 1.3) };
+      if (piece) {
+        this.ajouter('rp-arbre', () => piece.geometry, () => piece.material, [place], true, true);
+      } else {
+        this.ajouter(
+          'rp-buisson',
+          () => new THREE.SphereGeometry(1.6, 8, 6),
+          () => new THREE.MeshStandardMaterial({ color: 0x4a8c46, roughness: 1, flatShading: true }),
+          [{ ...place, y: y + 2 }],
+          true
+        );
+      }
+    }
+    // fleurs de l'îlot
+    const fleurs: Placement[] = [];
+    for (let i = 0; i < 10; i++) {
+      const a = rand() * 6.28;
+      const r = RAYON * ech * 0.55 * Math.sqrt(rand());
+      fleurs.push({
+        dist: dist + Math.cos(a) * r,
+        lat: lat + Math.sin(a) * r,
+        y: y + 0.5 * ech,
+        rotY: rand() * 6.28,
+        scale: new THREE.Vector3(1, 1, 1)
+      });
+    }
+    this.ajouter(
+      'rp-fleurs',
+      () => new THREE.SphereGeometry(0.34, 6, 5),
+      () => new THREE.MeshStandardMaterial({ color: 0xd6425c, roughness: 0.9, flatShading: true }),
+      fleurs
+    );
+  }
 
   private batir(z: Zone, rand: () => number, urbain: boolean): void {
     const d = this.q.densiteDecor;
@@ -773,6 +866,106 @@ export class Decor {
       () => new THREE.CylinderGeometry(0.05, 0.05, 1.7, 4).translate(0, 0.85, 0),
       () => new THREE.MeshStandardMaterial({ color: 0x6b5637, roughness: 1 }),
       piquets
+    );
+  }
+
+  /**
+   * Champ en fleur — tournesols dans le nord, lavande en Méditerranée.
+   *
+   * C'est le paysage qui change le plus la couleur d'une étape : une nappe
+   * jaune ou violette là où tout le reste est vert. Deux échelles de détail :
+   * une masse de rangs qui porte la couleur jusqu'à l'horizon, et de vraies
+   * fleurs individuelles seulement dans la bande que l'on voit vraiment
+   * depuis la route — au-delà, elles coûteraient des milliers d'instances
+   * pour un ou deux pixels chacune.
+   */
+  private champsFleuris(z: Zone, rand: () => number): void {
+    const rangs: Placement[] = [];
+    const tiges: Placement[] = [];
+    const corolles: Placement[] = [];
+    const d = Math.max(0.35, this.q.densiteDecor);
+    const pasRang = 4.2 / d;
+
+    for (let x = z.from; x < z.to; x += pasRang) {
+      const rotY = this.capAt(x);
+      for (const side of [-1, 1]) {
+        // la masse de rangs commence au-delà de la bande où l'on distingue les
+        // fleurs une à une : au premier plan, ce sont elles qu'on doit voir
+        for (let k = 0; k < 8; k++) {
+          const lat = side * (34 + k * 8);
+          const y = this.piste.groundAt(x, lat);
+          if (y > 90) continue;
+          rangs.push({ dist: x, lat, y, rotY, scale: new THREE.Vector3(1, 1, 1) });
+        }
+      }
+    }
+    /*
+     * Fleurs détaillées uniquement là où l'œil les distingue — et seulement
+     * si la machine suit. Elles se comptent en milliers : sur le navigateur
+     * d'une console, la nappe de rangs porte déjà la couleur du champ, qui
+     * est ce qui compte.
+     */
+    const pasFleur = 1.7 / d;
+    if (d < 0.6) {
+      this.poserChamp(rangs, tiges, corolles);
+      return;
+    }
+    for (let x = z.from; x < z.to; x += pasFleur) {
+      for (const side of [-1, 1]) {
+        for (let k = 0; k < 5; k++) {
+          if (rand() > 0.78) continue;
+          const lat = side * (15 + k * 4 + rand() * 3.5);
+          const y = this.piste.groundAt(x, lat);
+          if (y > 90) continue;
+          const h = this.med ? 0.45 + rand() * 0.2 : 1.5 + rand() * 0.45;
+          const un = new THREE.Vector3(1, h, 1);
+          tiges.push({ dist: x, lat, y, rotY: 0, scale: un });
+          corolles.push({
+            dist: x,
+            lat,
+            y: y + h,
+            rotY: rand() * 6.28,
+            scale: new THREE.Vector3(1, 1, 1)
+          });
+        }
+      }
+    }
+
+    this.poserChamp(rangs, tiges, corolles);
+  }
+
+  /** matériaux et géométries du champ en fleur, communs aux deux niveaux de détail */
+  private poserChamp(rangs: Placement[], tiges: Placement[], corolles: Placement[]): void {
+    const teinteRang = this.med ? 0x8d7bbf : 0xb9a233;
+    const teinteCorolle = this.med ? 0x9b7fd4 : 0xf2c318;
+    this.ajouter(
+      'rang-fleuri',
+      () => new THREE.BoxGeometry(6.2, this.med ? 0.45 : 0.8, 2.6).translate(0, 0.3, 0),
+      () => new THREE.MeshStandardMaterial({ color: teinteRang, roughness: 1, flatShading: true }),
+      rangs
+    );
+    if (!tiges.length) return;
+    this.ajouter(
+      'tige-fleur',
+      () => new THREE.CylinderGeometry(0.035, 0.05, 1, 4).translate(0, 0.5, 0),
+      () => new THREE.MeshStandardMaterial({ color: 0x4a7a34, roughness: 1 }),
+      tiges
+    );
+    this.ajouter(
+      'corolle',
+      () =>
+        this.med
+          ? new THREE.ConeGeometry(0.11, 0.5, 5).translate(0, 0.25, 0)
+          : new THREE.CylinderGeometry(0.32, 0.32, 0.09, 8).rotateX(Math.PI / 2.6),
+      () =>
+        new THREE.MeshStandardMaterial({
+          color: teinteCorolle,
+          roughness: 0.85,
+          flatShading: true,
+          side: THREE.DoubleSide
+        }),
+      corolles,
+      true
     );
   }
 

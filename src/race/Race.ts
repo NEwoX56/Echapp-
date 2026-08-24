@@ -26,6 +26,7 @@ import type { Ambiance } from '../audio/Music';
 import type { MusicDirector } from '../audio/MusicDirector';
 import { atmosphereDeEtape, brumeFinale } from './Atmosphere';
 import { Rain } from './Rain';
+import { Supporters } from './Supporters';
 
 export interface RaceHudState {
   energy: number;
@@ -220,6 +221,7 @@ export class Race {
   /** décalage du soleil par rapport au coureur ; varie avec l'heure de l'étape (Atmosphere.ts) */
   private sunOffset = new THREE.Vector3(38, 62, -30);
   private rain: Rain | null = null;
+  private supporters: Supporters | null = null;
   private camPos = new THREE.Vector3();
   private camLook = new THREE.Vector3();
   /** roulis de caméra en virage, amorti d'une image à l'autre */
@@ -306,6 +308,11 @@ export class Race {
     if (atmo.pluie) {
       this.rain = new Rain();
       this.scene.add(this.rain.group);
+    }
+    // supporters qui courent : réservés aux étapes où il y a des pentes
+    if (stage.type === 'montagne' || stage.type === 'vallonnee') {
+      this.supporters = new Supporters(quality.shadows);
+      this.scene.add(this.supporters.group);
     }
 
     this.camera = new THREE.PerspectiveCamera(62, aspect, 0.1, 3000);
@@ -521,6 +528,11 @@ export class Race {
     this.majBordures();
     this.majIncidents();
     this.majEnregistrementArrivee();
+    if (this.supporters) {
+      let tete = this.player;
+      for (const r of this.riders) if (r.dist > tete.dist) tete = r;
+      this.supporters.update(dt, this.track, tete.dist, tete.speed, this.track.gradeAt(tete.dist));
+    }
 
     // ravitaillement
     if (
@@ -1322,6 +1334,7 @@ export class Race {
     this.radio.reset();
     this.track.dispose();
     this.rain?.dispose();
+    this.supporters?.dispose();
     for (const r of this.riders) r.visual.dispose();
   }
 }

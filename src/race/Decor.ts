@@ -43,6 +43,8 @@ export interface PisteDecor {
   length: number;
   pose(dist: number, lateral: number, out: THREE.Vector3, tan?: THREE.Vector3): void;
   groundAt(dist: number, lat: number): number;
+  /** faux dans le vide et sur l'eau : rien ne doit s'y poser */
+  constructible(dist: number, lat: number): boolean;
 }
 
 export interface ReglagesDecor {
@@ -331,6 +333,12 @@ export class Decor {
     ombre = false,
     partage = false
   ): void {
+    /*
+     * Point de passage unique de tout le décor : c'est ici qu'on écarte ce qui
+     * tomberait dans le vide ou dans l'eau, plutôt que de répéter le test dans
+     * chaque générateur de paysage — et d'en oublier un.
+     */
+    places = places.filter((p) => this.piste.constructible(p.dist, p.lat));
     if (!places.length) return;
     const mesh = new THREE.InstancedMesh(geo, mat, places.length);
     const m = new THREE.Matrix4();

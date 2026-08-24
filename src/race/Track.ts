@@ -763,7 +763,46 @@ export class Track {
    * chaussée, puis gravier, puis herbe, puis terrain. Utilisée pour poser
    * arbres, spectateurs et barrières exactement sur la surface.
    */
+  /** écart latéral où le sol rompt : bord du vide en montagne, rivage en bord de mer */
+  private static readonly RUPTURE = 20;
+
+  /**
+   * Bride l'écart latéral à l'intérieur des virages.
+   *
+   * Le terrain est un ruban paramétré par (distance, écart) : à l'intérieur
+   * d'une courbe de rayon R, les lignes d'écart se croisent dès que l'écart
+   * atteint R et le maillage se replie sur lui-même. On borne donc bien avant
+   * ce rayon critique. La même bride doit s'appliquer au décor : sinon un
+   * arbre serait posé à un écart que le terrain, lui, a ramené plus près.
+   */
+  private brider(lat: number, dist: number): number {
+    const kappa = this.courbureAt(Math.min(Math.max(dist, 0), this.length));
+    if (Math.abs(kappa) < 1e-5) return lat;
+    const coteInterieur = kappa > 0 ? 1 : -1;
+    if (Math.sign(lat) !== coteInterieur) return lat;
+    const bride = (1 / Math.abs(kappa)) * 0.75;
+    return Math.abs(lat) > bride ? coteInterieur * bride : lat;
+  }
+
+  /**
+   * Peut-on poser quelque chose ici ?
+   *
+   * Non au-delà de la rupture du côté du vide, ni du côté de la mer : là, le
+   * sol rendu par groundAt est le fond du ravin ou la surface de l'eau. Le
+   * décor s'y posait quand même — on voyait des arbres pousser dans la mer et
+   * des maisons accrochées à l'à-pic. Rien ne s'installe sur un versant qui
+   * tombe ou sur de l'eau.
+   */
+  constructible(dist: number, lat: number): boolean {
+    if (Math.abs(lat) <= Track.RUPTURE) return true;
+    const cote = Math.sign(lat);
+    if (this.coteVide !== 0 && cote === this.coteVide) return false;
+    if (this.coteMer !== 0 && cote === this.coteMer) return false;
+    return true;
+  }
+
   groundAt(dist: number, lat: number): number {
+    lat = this.brider(lat, dist);
     const a = Math.abs(lat);
     if (a <= ROAD_WIDTH / 2) return 0.01;
     if (a <= ROAD_WIDTH / 2 + 1.8) {
@@ -806,7 +845,7 @@ export class Track {
     const a = Math.abs(lat);
     const TRENCH = -0.55; // décaissement sous la chaussée
     const FLAT_TO = 14; // fin de la zone plate creusée
-    const RISE_FROM = 20; // début du relief
+    const RISE_FROM = Track.RUPTURE; // début du relief — et bord du vide
 
     if (a <= FLAT_TO) return TRENCH;
 
@@ -931,8 +970,31 @@ export class Track {
     // multiplier les sommets sur une machine modeste
     const pas = this.q.pasTerrain ?? 9;
     const nLong = Math.min(460, Math.max(90, Math.round(this.length / pas)));
-    const nLat = pas > 18 ? 30 : pas > 12 ? 38 : 46;
+    const nCol = pas > 18 ? 30 : pas > 12 ? 38 : 46;
     const maxLat = 520;
+
+    /*
+     * Écarts latéraux échantillonnés.
+     *
+     * La répartition de base est dense près de la route et large au loin. On y
+     * ajoute de force deux colonnes serrées de part et d'autre de RUPTURE : au
+     * bord d'un vide de montagne ou d'un rivage, le sol tombe d'un coup de
+     * plusieurs dizaines de mètres à cet écart précis. Sans colonne juste
+     * avant et juste après, le maillage tirait un seul long triangle par-dessus
+     * la rupture, alors que groundAt — dont se sert tout le décor — la voyait,
+     * elle. Arbres et maisons se retrouvaient posés sur un sol qui n'existait
+     * pas à cet endroit : ils flottaient au-dessus du vide.
+     */
+    const lats: number[] = [];
+    for (let j = 0; j <= nCol; j++) {
+      const u = (j / nCol) * 2 - 1;
+      lats.push(Math.sign(u) * Math.pow(Math.abs(u), 2.1) * maxLat);
+    }
+    for (const bord of [-Track.RUPTURE - 1.4, -Track.RUPTURE + 0.4, Track.RUPTURE - 0.4, Track.RUPTURE + 1.4]) {
+      lats.push(bord);
+    }
+    lats.sort((a, b) => a - b);
+    const nLat = lats.length - 1;
     const positions: number[] = [];
     const colors: number[] = [];
     const uvs: number[] = [];
@@ -961,17 +1023,9 @@ export class Track {
        * avant ce rayon critique. Sans cette bride, tout virage un peu franc
        * produisait des triangles retournés en travers de la route.
        */
-      const kappa = this.courbureAt(Math.min(dist, this.length));
-      const rayon = Math.abs(kappa) > 1e-5 ? 1 / Math.abs(kappa) : Infinity;
-      const brideInterieur = Math.min(maxLat, rayon * 0.75);
-      const coteInterieur = kappa > 0 ? 1 : -1;
       for (let j = 0; j <= nLat; j++) {
-        // répartition non linéaire : dense près de la route, large au loin
-        const u = (j / nLat) * 2 - 1;
-        let lat = Math.sign(u) * Math.pow(Math.abs(u), 2.1) * maxLat;
-        if (Math.sign(lat) === coteInterieur && Math.abs(lat) > brideInterieur) {
-          lat = coteInterieur * brideInterieur;
-        }
+        // même bride que groundAt, pour que décor et maillage restent d'accord
+        const lat = this.brider(lats[j], dist);
         const rel = this.reliefAt(dist, lat, seed);
         this.pose(dist, lat, p);
         const y = p.y + rel;
@@ -1136,6 +1190,8 @@ export class Track {
     placements: { dist: number; lat: number; y: number; scale: number; rotY: number }[],
     castShadow = true
   ): void {
+    // même règle que pour le décor : rien dans le vide ni sur l'eau
+    placements = placements.filter((p) => this.constructible(p.dist, p.lat));
     if (!placements.length) return;
     const mesh = new THREE.InstancedMesh(piece.geometry, piece.material, placements.length);
     const m = new THREE.Matrix4();
@@ -1233,6 +1289,7 @@ export class Track {
           const lat = side * (ROAD_WIDTH / 2 + 4.5 + rand() * (mountain ? 70 : 40));
           const y = this.groundAt(dist, lat);
           if (y > 120) continue; // pas d'arbres sur les hauts sommets
+          if (!this.constructible(dist, lat)) continue; // ni dans le vide, ni dans l'eau
           const piece = this.scenery!.getRandom(cle, rand)!;
           const liste = parPiece.get(piece) ?? [];
           liste.push({ dist, lat, y, scale: 0.72 + rand() * 0.6, rotY: rand() * 6.28 });
@@ -1276,8 +1333,8 @@ export class Track {
       for (const side of [-1, 1]) {
         const lateral = side * (ROAD_WIDTH / 2 + 4.5 + rand() * (mountain ? 70 : 40));
         const rel = this.groundAt(dist, lateral);
-        // pas d'arbres sur les hauts sommets
-        if (rel > 120) {
+        // pas d'arbres sur les hauts sommets, ni dans le vide, ni dans l'eau
+        if (rel > 120 || !this.constructible(dist, lateral)) {
           idx++;
           continue;
         }

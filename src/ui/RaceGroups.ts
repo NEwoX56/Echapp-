@@ -173,6 +173,78 @@ export function logoTour(tourId: string): string {
          <path d="M8 46 Q18 38 28 44 T48 46" fill="none" stroke="#8a5a34" stroke-width="2.4" stroke-linecap="round" opacity="0.75"/>`,
         '#e8935a'
       );
+    case 'ardoise':
+      return cadre(
+        `<path d="M14 36 L22 20 L34 20 L42 36 Z" fill="none" stroke="#8a95a3" stroke-width="2.6" stroke-linejoin="round"/>
+         <path d="M12 42 h32" stroke="#5a6472" stroke-width="3" stroke-linecap="round"/>
+         <path d="M18 42 v-4 M28 42 v-4 M38 42 v-4" stroke="#8a95a3" stroke-width="2"/>`,
+        '#8a95a3'
+      );
+    case 'toundra':
+      return cadre(
+        `<path d="M28 12 V44 M28 12 l-7 7 M28 12 l7 7" stroke="#9fd8ef" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+         <path d="M16 22 l24 12 M40 22 l-24 12" stroke="#9fd8ef" stroke-width="2.2" stroke-linecap="round"/>`,
+        '#9fd8ef'
+      );
+    case 'sierra':
+      return cadre(
+        `<path d="M9 40 L20 20 L28 31 L36 16 L47 40 Z" fill="none" stroke="#e0a33c" stroke-width="2.6" stroke-linejoin="round"/>
+         <circle cx="36" cy="14" r="4.5" fill="#e0a33c"/>`,
+        '#e0a33c'
+      );
+    case 'archipel':
+      return cadre(
+        `<path d="M10 32 q6 -8 12 0 t12 0 t12 0" fill="none" stroke="#3fd0c9" stroke-width="2.8" stroke-linecap="round"/>
+         <path d="M10 40 q6 -8 12 0 t12 0 t12 0" fill="none" stroke="#2f9e97" stroke-width="2.3" stroke-linecap="round"/>
+         <path d="M20 24 L28 12 L36 24 Z" fill="#3fd0c9"/>`,
+        '#3fd0c9'
+      );
+    case 'volcans':
+      return cadre(
+        `<path d="M10 42 L24 16 L32 16 L46 42 Z" fill="none" stroke="#e8593a" stroke-width="2.6" stroke-linejoin="round"/>
+         <path d="M24 16 q4 -8 8 0" fill="none" stroke="#ffb03a" stroke-width="2.6" stroke-linecap="round"/>`,
+        '#e8593a'
+      );
+    case 'steppe':
+      return cadre(
+        `<path d="M8 34 h40 M8 41 h40" stroke="#c2b56a" stroke-width="2.6" stroke-linecap="round"/>
+         <path d="M14 24 q10 -6 20 0 t10 2" fill="none" stroke="#e2d489" stroke-width="2.4" stroke-linecap="round"/>`,
+        '#c2b56a'
+      );
+    case 'dolomites':
+      return cadre(
+        `<path d="M8 42 L18 14 L26 30 L34 10 L48 42 Z" fill="none" stroke="#d9c7ef" stroke-width="2.5" stroke-linejoin="round"/>
+         <path d="M18 14 l3 6 M34 10 l3 7" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"/>`,
+        '#d9c7ef'
+      );
+    case 'delta':
+      return cadre(
+        `<path d="M28 10 v14 M28 24 l-11 18 M28 24 l11 18" fill="none" stroke="#5fb8e8" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+         <path d="M28 24 l-2 18 M28 24 l2 18" fill="none" stroke="#3d8ab8" stroke-width="2" stroke-linecap="round"/>`,
+        '#5fb8e8'
+      );
+    case 'canyon':
+      return cadre(
+        `<path d="M12 10 v22 l6 10 V16 Z" fill="#c8703f"/>
+         <path d="M44 10 v22 l-6 10 V16 Z" fill="#c8703f"/>
+         <path d="M22 44 q6 -10 12 0" fill="none" stroke="#e0a070" stroke-width="2.4" stroke-linecap="round"/>`,
+        '#c8703f'
+      );
+    case 'mondial':
+      return cadre(
+        `<circle cx="28" cy="27" r="13" fill="none" stroke="#f4f4f0" stroke-width="2.4"/>
+         <path d="M15 27h26M28 14v26" stroke="#f4f4f0" stroke-width="1.8"/>
+         <path d="M28 14q8 13 0 26M28 14q-8 13 0 26" fill="none" stroke="#f4f4f0" stroke-width="1.8"/>
+         <path d="M15 21h26M15 33h26" stroke="#3fa9f5" stroke-width="1.8"/>`,
+        '#f4f4f0'
+      );
+    case 'legende':
+      return cadre(
+        `<path d="M28 9 l5.2 10.8 11.8 1.6 -8.6 8.3 2.1 11.8 -10.5 -5.7 -10.5 5.7 2.1 -11.8 -8.6 -8.3 11.8 -1.6 Z"
+                fill="#ffd633" stroke="#ffd633" stroke-width="1.4" stroke-linejoin="round"/>
+         <path d="M12 46 h32" stroke="#ffd633" stroke-width="3" stroke-linecap="round"/>`,
+        '#ffd633'
+      );
     default:
       return cadre(
         `<path d="M9 40 L22 18 L30 30 L36 22 L47 40 Z" fill="none" stroke="#ffd633" stroke-width="2.6" stroke-linejoin="round"/>

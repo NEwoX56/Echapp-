@@ -122,6 +122,37 @@ ok('compteurs d’instances cohérents', pose.total === pose.n, `${pose.total} i
 ok('positions dans les bornes du parcours', pose.bornes);
 ok('annulation du dernier objet', pose.apresAnnule === pose.n - 1);
 
+console.log('\n--- MANETTE ---');
+const pad = await page.evaluate(() => {
+  const r = window.__race;
+  r.atelierType = 'chene';
+  const suite = [];
+  for (let i = 0; i < 3; i++) { r.changerModele(1); suite.push(r.atelierType); }
+  r.changerModele(-3);
+  const retour = r.atelierType;
+  r.allerA(r.track.length * 0.5, 20);
+  const avant = r.nombreObjets;
+  const pose = r.poserIci();
+  return { suite, retour, pose, delta: r.nombreObjets - avant };
+});
+ok('LB/RB parcourt le catalogue', new Set(pad.suite).size === 3, pad.suite.join(' → '));
+ok('le cycle revient sur ses pas', pad.retour === 'chene', pad.retour);
+ok('pose à la manette', pad.pose && pad.delta === 1);
+await page.waitForTimeout(200);
+const synchro = await page.evaluate(() => {
+  const r = window.__race;
+  r.atelierType = 'phare';
+  r.atelierEchelle = 2.5;
+  return true;
+});
+await page.waitForTimeout(400);
+await page.evaluate(() => window.__game && null);
+await page.waitForTimeout(600);
+const actif = await page.locator('.atl-modele.active').getAttribute('data-atl-modele');
+ok('la palette suit le modèle choisi hors panneau', actif === 'phare', String(actif));
+ok('la catégorie a suivi', (await page.locator('.atl-cat.active').textContent()).trim() === 'Bâtiments');
+await page.evaluate(() => { window.__race.annulerDernierObjet(); });
+
 console.log('\n--- ENREGISTREMENT DES OBJETS ---');
 await page.click('[data-atl="enregistrer"]');
 await page.waitForTimeout(500);
@@ -131,6 +162,7 @@ const sauve = await page.evaluate(async () => {
   return { n: avecObjets.length, objets: avecObjets[0]?.objets?.length ?? 0, id: avecObjets[0]?.id };
 });
 ok('objets enregistrés dans une création', sauve.n === 1, `${sauve.objets} objet(s)`);
+ok('le compte inclut la pose manette', sauve.objets === 19, String(sauve.objets));
 
 console.log('\n--- RETOUR AU VÉLO ---');
 const retour = await page.evaluate(() => {

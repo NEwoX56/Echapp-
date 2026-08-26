@@ -28,7 +28,7 @@ import type { MusicDirector } from '../audio/MusicDirector';
 import { atmosphereDeEtape, brumeFinale } from './Atmosphere';
 import { Rain } from './Rain';
 import { Supporters } from './Supporters';
-import { geometrie as geometrieObjet } from '../monde/Catalogue';
+import { CATALOGUE, geometrie as geometrieObjet } from '../monde/Catalogue';
 
 export interface RaceHudState {
   energy: number;
@@ -661,6 +661,14 @@ export class Race {
 
     /* ---- atelier ---- */
     if (this.libre?.atelier) {
+      /*
+       * Tout se fait aussi à la manette. Le jeu tourne sur le navigateur
+       * d'une console : un atelier qui exigerait une souris n'y existerait
+       * tout simplement pas.
+       */
+      const cycle = input.tabShift;
+      if (cycle) this.changerModele(cycle);
+      if (input.poserObjet && !this.poserIci()) this.onEvent('Vise le sol pour poser');
       if (input.takePressed('r')) this.atelierRotation += Math.PI / 8;
       if (input.takePressed('+') || input.takePressed('=')) {
         this.atelierEchelle = Math.min(4, this.atelierEchelle * 1.15);
@@ -845,6 +853,15 @@ export class Race {
     this.apercu.position.set(this.tmp.x, this.tmp.y + this.track.groundAt(dist, lat), this.tmp.z);
     this.apercu.rotation.set(0, Math.atan2(this.tan.x, this.tan.z) + this.atelierRotation, 0);
     this.apercu.scale.setScalar(this.atelierEchelle);
+  }
+
+  /** passe au modèle suivant ou précédent du catalogue */
+  changerModele(delta: number): void {
+    const i = CATALOGUE.findIndex((m) => m.id === this.atelierType);
+    const j = (i + delta + CATALOGUE.length) % CATALOGUE.length;
+    this.atelierType = CATALOGUE[j].id;
+    this.onEvent(CATALOGUE[j].nom);
+    this.onAtelier?.();
   }
 
   /** pose le modèle courant au point visé */

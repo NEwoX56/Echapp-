@@ -45,7 +45,7 @@ await page.waitForTimeout(900);
 const c1 = await cibles();
 const cpt = (k) => c1.filter(c => k in c.data).length;
 // six entrées de navigation, plus l'engrenage en haut à gauche
-ok('onglets principaux atteignables', cpt('tab') === 6, `${cpt('tab')} cibles`);
+ok('onglets principaux atteignables', cpt('tab') === 7, `${cpt('tab')} cibles`);
 ok('onglets d\'atelier atteignables', cpt('atelier') === 3, `${cpt('atelier')} sous-onglets`);
 ok('pastilles de couleur atteignables', cpt('colorField') >= 32, `${cpt('colorField')} pastilles`);
 ok('motifs de maillot atteignables', cpt('pattern') === 8, `${cpt('pattern')} motifs`);

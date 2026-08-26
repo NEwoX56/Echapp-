@@ -2,6 +2,7 @@ import type { Race } from '../race/Race';
 import {
   CATALOGUE,
   LIBELLE_CATEGORIE,
+  modele,
   type CategorieObjet
 } from '../monde/Catalogue';
 import { preparerVignettes, vignette } from '../monde/Vignettes';
@@ -34,6 +35,9 @@ export class Atelier {
   private titre = '';
   /** dernier libellé affiché, pour ne réécrire le DOM que s'il change */
   private derniereLigne = '';
+  /** dernier état connu de la palette, pour suivre les réglages faits à la manette */
+  private dernierModele = '';
+  private dernierReglage = '';
 
   constructor(parent: HTMLElement) {
     this.root = document.createElement('div');
@@ -89,7 +93,7 @@ export class Atelier {
         <div class="atl-aide">
           <b>ZQSD</b> ou <b>flèches</b> se déplacer · <b>Espace/Maj</b> monter, descendre ·
           <b>glisser la souris</b> regarder · <b>molette</b> vitesse · <b>T</b> turbo
-          ${this.edition ? ' · <b>clic</b> poser · <b>X</b> retirer · <b>R</b> pivoter · <b>+/-</b> taille' : ''}
+          ${this.edition ? ' · <b>clic</b> ou <b>A</b> poser · <b>X</b> retirer · <b>R</b> pivoter · <b>+/-</b> taille · <b>LB/RB</b> changer de modèle' : ''}
         </div>
       </div>`;
     this.brancher();
@@ -263,6 +267,38 @@ export class Atelier {
   rafraichir(): void {
     const r = this.race;
     if (!r || this.root.classList.contains('hidden')) return;
+
+    /*
+     * Le modèle, la taille et l'orientation se changent aussi au clavier et
+     * à la manette, sans passer par ce panneau. Il se remet donc à jour
+     * depuis l'état réel de l'atelier plutôt que d'être la seule source de
+     * vérité — sinon la palette montrerait un arbre pendant qu'on pose des
+     * maisons.
+     */
+    if (this.edition) {
+      if (r.atelierType !== this.dernierModele) {
+        this.dernierModele = r.atelierType;
+        const cat = modele(r.atelierType)?.categorie;
+        if (cat && cat !== this.categorie) {
+          this.categorie = cat;
+          this.construire();
+        } else {
+          this.root
+            .querySelectorAll<HTMLElement>('[data-atl-modele]')
+            .forEach((b) => b.classList.toggle('active', b.dataset.atlModele === r.atelierType));
+        }
+      }
+      const reglage = `${r.atelierEchelle.toFixed(2)}|${r.atelierRotation.toFixed(3)}`;
+      if (reglage !== this.dernierReglage) {
+        this.dernierReglage = reglage;
+        const degres = Math.round(((r.atelierRotation * 180) / Math.PI) % 360);
+        this.majChamp('#atl-ech', `${r.atelierEchelle.toFixed(2)}×`);
+        this.majChamp('#atl-rot', `${degres}°`);
+        this.majCurseur('#atl-echelle', String(r.atelierEchelle));
+        this.majCurseur('#atl-rotation', String(degres));
+      }
+    }
+
     const p = r.pointSurvole;
     const km = (p.dist / r.track.length) * r.stage.displayKm;
     const ligne = `km ${km.toFixed(1)} / ${r.stage.displayKm} · ${Math.round(r.volVitesse)} m/s · ${r.nombreObjets} objet${r.nombreObjets > 1 ? 's' : ''}`;
@@ -272,10 +308,20 @@ export class Atelier {
       if (el) el.textContent = ligne;
       const pos = this.root.querySelector<HTMLElement>('#atl-pos');
       if (pos) pos.textContent = `km ${km.toFixed(1)}`;
-      const curseur = this.root.querySelector<HTMLInputElement>('#atl-parcours');
-      if (curseur && document.activeElement !== curseur) {
-        curseur.value = String(Math.round((p.dist / r.track.length) * 1000));
-      }
+      this.majCurseur('#atl-parcours', String(Math.round((p.dist / r.track.length) * 1000)));
+      this.majCurseur('#atl-vitesse', String(Math.round(r.volVitesse)));
+      this.majChamp('#atl-vit', `${Math.round(r.volVitesse)} m/s`);
     }
+  }
+
+  private majChamp(sel: string, texte: string): void {
+    const el = this.root.querySelector<HTMLElement>(sel);
+    if (el) el.textContent = texte;
+  }
+
+  /** n'écrase pas un curseur que le joueur est en train de manipuler */
+  private majCurseur(sel: string, valeur: string): void {
+    const el = this.root.querySelector<HTMLInputElement>(sel);
+    if (el && document.activeElement !== el) el.value = valeur;
   }
 }

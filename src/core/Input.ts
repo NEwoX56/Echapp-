@@ -389,6 +389,11 @@ export class Input {
     return this.down('t') || this.padDown(BTN.r1);
   }
 
+  /** poser l'objet visé dans l'atelier : Entrée, ou A / Croix à la manette */
+  get poserObjet(): boolean {
+    return this.takePressed('enter') || this.takePadPressed(BTN.sud);
+  }
+
   /** retirer l'objet visé dans l'atelier : X, ou Carré / X à la manette */
   get retirerObjet(): boolean {
     return this.takePressed('x') || this.takePadPressed(BTN.ouest);

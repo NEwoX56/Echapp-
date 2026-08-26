@@ -123,12 +123,18 @@ export class HUD {
     this.root = root;
   }
 
-  mount(stage: StageDef, tourId = 'cimes'): void {
+  mount(stage: StageDef, tourId = 'cimes', sansFatigue = false): void {
     this.stage = stage;
     this.tourId = tourId;
     this.tvSignature = '';
+    /*
+     * Séance libre sans fatigue : la jauge d'énergie et le ravitaillement
+     * n'ont plus rien à dire. Les laisser pleines en permanence serait un
+     * bruit à l'écran ; on les retire, et l'on annonce à la place la
+     * touche qui fait décoller la caméra.
+     */
     this.root.innerHTML = `
-      <div class="hud">
+      <div class="hud${sansFatigue ? ' hud-libre' : ''}">
         <div class="tv-bar" id="tv-bar">
           <div class="tv-logo" id="tv-logo"></div>
           <div class="tv-groupes" id="tv-groupes"></div>
@@ -155,7 +161,7 @@ export class HUD {
 
         <div class="hud-bottom">
           <div class="hud-left">
-            <div class="hud-label">Énergie</div>
+            <div class="hud-label">${sansFatigue ? 'Énergie <b>illimitée</b>' : 'Énergie'}</div>
             <div class="energy-bar"><div id="hud-energy"></div></div>
             <div class="hud-label">Allure</div>
             <div class="effort-bar"><div id="hud-effort"></div></div>
@@ -169,6 +175,7 @@ export class HUD {
             <div class="hud-supplies">
               <span class="supply"><b id="hud-bidons">4</b> bidon(s) <kbd id="hud-key-bidon">B</kbd></span>
               <span class="supply"><b id="hud-gels">3</b> gel(s) <kbd id="hud-key-gel">G</kbd></span>
+              ${sansFatigue ? '<span class="supply">Caméra libre <kbd>V</kbd></span>' : ''}
             </div>
           </div>
           <div class="hud-right">

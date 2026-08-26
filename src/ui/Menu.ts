@@ -1,4 +1,4 @@
-import type { StageDef, TourDef, RiderStats, Periode, Meteo } from '../data/types';
+import type { StageDef, TourDef, RiderStats } from '../data/types';
 import type { Career } from '../career/Career';
 import { TOURS } from '../data/tours';
 import { getRoster, equipes } from '../data/rosterStore';
@@ -17,6 +17,8 @@ import {
   type BeardStyle
 } from '../data/appearance';
 import { profileSvg, TYPE_LABEL, formatTime, formatGap, hexColor, jerseyIconSvg, toast } from './util';
+import { PanneauTest } from './PanneauTest';
+import type { OptionsLibre } from '../race/Race';
 import { logoTour } from './RaceGroups';
 import { RiderPreview } from './RiderPreview';
 import { RosterEditor } from './RosterEditor';
@@ -42,15 +44,11 @@ export class Menu {
   private root: HTMLElement;
   private career: Career;
   private onPlay: (stage: StageDef) => void;
-  private onTest: (stage: StageDef, seul: boolean) => void;
+  private onTest: (stage: StageDef, options: OptionsLibre) => void;
+  private onTestSerie: (stages: StageDef[], options: OptionsLibre) => void;
+  private panneauTest: PanneauTest;
   private panel: Panel = 'tours';
   private atelierTab: AtelierTab = 'maillot';
-  /* ---- réglages de la séance libre (onglet Test) ---- */
-  private testTour = TOURS[0].id;
-  private testStage = TOURS[0].stages[0].id;
-  private testPeriode: 'auto' | Periode = 'auto';
-  private testMeteo: 'auto' | Meteo = 'auto';
-  private testSeul = false;
   private classementTab: ClassementKey = 'general';
   private preview = new RiderPreview();
   private editeur: RosterEditor;
@@ -88,13 +86,20 @@ export class Menu {
     root: HTMLElement,
     career: Career,
     onPlay: (stage: StageDef) => void,
-    onTest: (stage: StageDef, seul: boolean) => void
+    onTest: (stage: StageDef, options: OptionsLibre) => void,
+    onTestSerie: (stages: StageDef[], options: OptionsLibre) => void
   ) {
     this.root = root;
     this.career = career;
     this.onPlay = onPlay;
     this.onTest = onTest;
+    this.onTestSerie = onTestSerie;
     this.editeur = new RosterEditor(root, () => this.render());
+    this.panneauTest = new PanneauTest({
+      lancer: (stage, options) => this.onTest(stage, options),
+      lancerSerie: (stages, options) => this.onTestSerie(stages, options),
+      rafraichir: () => this.render()
+    });
   }
 
   render(): void {
@@ -898,99 +903,14 @@ export class Menu {
   /* --------------------------------------------------------- */
 
   /**
-   * Séance libre. On y choisit n'importe quelle étape du jeu — y compris
-   * celles d'un tour non débloqué — et l'on force l'heure et la météo, ce que
-   * la carrière ne permet pas : elles y sont fixées par l'étape. Rien de ce
-   * qui s'y passe n'est enregistré, c'est un terrain d'essai.
+   * Séance libre, atelier et créations.
+   *
+   * L'onglet a grandi au point de mériter son propre fichier : il tient
+   * désormais quatre ateliers, dont un éditeur de parcours et un générateur.
+   * Le menu se contente de lui passer la main.
    */
   private renderTest(): string {
-    const tour = TOURS.find((t) => t.id === this.testTour) ?? TOURS[0];
-    const etape = tour.stages.find((s) => s.id === this.testStage) ?? tour.stages[0];
-
-    const chips = (
-      valeurs: readonly (readonly [string, string])[],
-      actif: string,
-      attr: string
-    ) =>
-      valeurs
-        .map(
-          ([v, l]) =>
-            `<button class="chip ${actif === v ? 'active' : ''}" data-${attr}="${v}">${l}</button>`
-        )
-        .join('');
-
-    return `
-      <div class="panel-params">
-        <div class="perso-block">
-          <h3>Séance libre <small>rien n'est enregistré</small></h3>
-          <p class="hint">
-            Roule sur n'importe quelle étape, même celles que ta carrière n'a
-            pas encore débloquées, avec l'heure et la météo que tu veux. Ni
-            classement, ni expérience, ni contrat : de quoi reconnaître un
-            parcours ou t'entraîner à un final. <b>Échap</b> (ou <b>B</b> à la
-            manette) pour revenir au menu à tout moment.
-          </p>
-        </div>
-
-        <div class="perso-block">
-          <h3>Épreuve</h3>
-          <div class="chip-row">
-            ${chips(TOURS.map((t) => [t.id, t.name] as const), tour.id, 'test-tour')}
-          </div>
-          <h3>Étape</h3>
-          <div class="chip-row">
-            ${chips(
-              tour.stages.map((s) => [s.id, `${TYPE_LABEL[s.type]} · ${s.name}`] as const),
-              etape.id,
-              'test-etape'
-            )}
-          </div>
-          <p class="hint">${etape.description}</p>
-        </div>
-
-        <div class="perso-block">
-          <h3>Conditions</h3>
-          <div class="chip-row">
-            ${chips(
-              [
-                ['auto', "Heure de l'étape"],
-                ['jour', 'Plein jour'],
-                ['aube', 'Aube'],
-                ['crepuscule', 'Crépuscule'],
-                ['nuit', 'Nuit']
-              ] as const,
-              this.testPeriode,
-              'test-periode'
-            )}
-          </div>
-          <div class="chip-row">
-            ${chips(
-              [
-                ['auto', "Météo de l'étape"],
-                ['sec', 'Sec'],
-                ['pluie', 'Pluie']
-              ] as const,
-              this.testMeteo,
-              'test-meteo'
-            )}
-          </div>
-          <div class="chip-row">
-            ${chips(
-              [
-                ['peloton', 'Avec le peloton'],
-                ['seul', 'Seul sur la route']
-              ] as const,
-              this.testSeul ? 'seul' : 'peloton',
-              'test-adv'
-            )}
-          </div>
-        </div>
-
-        <button class="btn-primary grand" data-action="test-rouler">
-          Rouler
-          <small>${etape.name} · ${etape.displayKm} km</small>
-        </button>
-      </div>`;
+    return this.panneauTest.render();
   }
 
   private renderParams(): string {
@@ -1346,52 +1266,8 @@ export class Menu {
       });
     });
 
-    /* ---- onglet Test ---- */
-    this.root.querySelectorAll<HTMLButtonElement>('[data-test-tour]').forEach((b) => {
-      b.addEventListener('click', () => {
-        this.testTour = b.dataset.testTour!;
-        // changer d'épreuve remet sur sa première étape
-        this.testStage = (TOURS.find((t) => t.id === this.testTour) ?? TOURS[0]).stages[0].id;
-        this.render();
-      });
-    });
-    this.root.querySelectorAll<HTMLButtonElement>('[data-test-etape]').forEach((b) => {
-      b.addEventListener('click', () => {
-        this.testStage = b.dataset.testEtape!;
-        this.render();
-      });
-    });
-    this.root.querySelectorAll<HTMLButtonElement>('[data-test-periode]').forEach((b) => {
-      b.addEventListener('click', () => {
-        this.testPeriode = b.dataset.testPeriode as 'auto' | Periode;
-        this.render();
-      });
-    });
-    this.root.querySelectorAll<HTMLButtonElement>('[data-test-meteo]').forEach((b) => {
-      b.addEventListener('click', () => {
-        this.testMeteo = b.dataset.testMeteo as 'auto' | Meteo;
-        this.render();
-      });
-    });
-    this.root.querySelectorAll<HTMLButtonElement>('[data-test-adv]').forEach((b) => {
-      b.addEventListener('click', () => {
-        this.testSeul = b.dataset.testAdv === 'seul';
-        this.render();
-      });
-    });
-    q<HTMLButtonElement>('[data-action="test-rouler"]')?.addEventListener('click', () => {
-      const tour = TOURS.find((t) => t.id === this.testTour) ?? TOURS[0];
-      const base = tour.stages.find((s) => s.id === this.testStage) ?? tour.stages[0];
-      /*
-       * L'heure et la météo sont des champs de l'étape : les forcer revient à
-       * passer une copie modifiée. Rien à câbler jusqu'au moteur, tout ce qui
-       * les lit part déjà de la définition d'étape.
-       */
-      const stage: StageDef = { ...base };
-      if (this.testPeriode !== 'auto') stage.periode = this.testPeriode;
-      if (this.testMeteo !== 'auto') stage.meteo = this.testMeteo;
-      this.onTest(stage, this.testSeul);
-    });
+    /* ---- onglet Test : tout est géré par son propre panneau ---- */
+    if (this.panel === 'test') this.panneauTest.bind(this.root);
 
     this.root.querySelectorAll<HTMLButtonElement>('[data-crevaison]').forEach((b) => {
       b.addEventListener('click', () => {

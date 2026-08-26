@@ -40,6 +40,26 @@ export interface VentDef {
   name: string;
 }
 
+/**
+ * Objet posé à la main sur un parcours.
+ *
+ * Ce sont les meubles ajoutés dans l'atelier de l'onglet Test. Ils vivent
+ * dans la définition d'étape, comme les cols ou les secteurs pavés : rien à
+ * câbler ailleurs, le parcours se recharge tel qu'on l'a laissé.
+ */
+export interface ObjetPose {
+  /** identifiant du modèle dans le catalogue (src/monde/Catalogue.ts) */
+  type: string;
+  /** distance le long du parcours, en mètres monde */
+  dist: number;
+  /** décalage latéral par rapport à l'axe de la route (négatif = gauche) */
+  lat: number;
+  /** rotation propre autour de la verticale, en radians */
+  rot: number;
+  /** facteur d'échelle */
+  echelle: number;
+}
+
 export interface StageDef {
   id: string;
   name: string;
@@ -66,6 +86,10 @@ export interface StageDef {
   biome?: Biome;
   /** vrai si l'étape longe une vraie côte : une mer visible borde la route */
   mer?: boolean;
+  /** meubles ajoutés à la main dans l'atelier de l'onglet Test */
+  objets?: ObjetPose[];
+  /** étape écrite par le joueur : elle n'appartient à aucun tour officiel */
+  creee?: boolean;
 }
 
 export interface TourDef {

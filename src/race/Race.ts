@@ -5,7 +5,8 @@ import type {
   RosterRider,
   RiderStats,
   Difficulty,
-  StagePoints
+  StagePoints,
+  ObjetPose
 } from '../data/types';
 import type { RiderAppearance, ClassementKey } from '../data/appearance';
 import { reglage, scaleStats } from '../data/difficulty';
@@ -27,6 +28,7 @@ import type { MusicDirector } from '../audio/MusicDirector';
 import { atmosphereDeEtape, brumeFinale } from './Atmosphere';
 import { Rain } from './Rain';
 import { Supporters } from './Supporters';
+import { geometrie as geometrieObjet } from '../monde/Catalogue';
 
 export interface RaceHudState {
   energy: number;
@@ -118,6 +120,23 @@ interface PlayerConfig {
   crevaisonFrequence?: 'aucune' | 'normale' | 'frequente';
 }
 
+/**
+ * Réglages d'une séance libre (onglet Test).
+ *
+ * Rien de tout cela n'existe en carrière : ce sont des libertés que l'on
+ * s'accorde pour regarder un parcours, pas des options de jeu.
+ */
+export interface OptionsLibre {
+  /** aucun adversaire sur la route */
+  seul: boolean;
+  /** énergie infinie, aucune crevaison */
+  sansFatigue: boolean;
+  /** démarrer caméra libre, simulation gelée */
+  explorer: boolean;
+  /** l'atelier est ouvert : la pose d'objets est autorisée */
+  atelier: boolean;
+}
+
 /** état du général avant l'étape, pour évaluer les menaces */
 export interface GcSnapshot {
   /** temps cumulé par coureur ; vide au départ du tour */
@@ -157,6 +176,26 @@ export class Race {
   private get cameraMode(): (typeof Race.CAMERA_MODES)[number] {
     return Race.CAMERA_MODES[this.cameraModeIndex];
   }
+
+  /* ---- séance libre : vol libre et atelier ---- */
+  /** réglages de la séance libre, nuls en carrière */
+  readonly libre: OptionsLibre | null;
+  /**
+   * Caméra détachée du coureur.
+   *
+   * Tant qu'elle est active, la course est gelée : personne n'avance, le
+   * chronomètre ne tourne pas, l'étape ne peut pas se terminer pendant qu'on
+   * survole le parcours. C'est la différence entre visiter et rouler.
+   */
+  volLibre = false;
+  private volPos = new THREE.Vector3();
+  private volLacet = 0;
+  private volTangage = -0.15;
+  /** vitesse de déplacement en vol, en m/s */
+  volVitesse = 30;
+  /** distance sur le parcours du point survolé, utile à l'atelier */
+  private volDist = 0;
+  private volLat = 0;
 
   /** points marqués pendant l'étape */
   private pointsMap = new Map<string, StagePoints>();
@@ -240,10 +279,12 @@ export class Race {
     difficulty: Difficulty,
     quality: import('../core/Quality').QualitySettings,
     audio: { engine: AudioEngine; music: MusicDirector },
-    onEvent: (msg: string) => void
+    onEvent: (msg: string) => void,
+    libre: OptionsLibre | null = null
   ) {
     this.stage = stage;
     this.onEvent = onEvent;
+    this.libre = libre;
     this.gc = gc;
     this.audio = audio.engine;
     this.music = audio.music;
@@ -444,6 +485,26 @@ export class Race {
       });
     }
 
+    /*
+     * Séance libre. Tout se règle ici, après la construction habituelle :
+     * la course reste une course, on lui retire simplement ce qui gêne quand
+     * on vient regarder plutôt que disputer.
+     */
+    if (this.libre?.sansFatigue) {
+      this.crevaisonJoueurAt = -1;
+      for (const r of this.riders) {
+        r.sansFatigue = true;
+        r.crevaisonSubie = true;
+      }
+      this.crevaisonBots.clear();
+    }
+    if (this.libre?.explorer) {
+      // pas de décompte : on n'attend pas trois secondes pour visiter
+      this.countdown = 0;
+      this.dernierBip = -1;
+      this.entrerVolLibre();
+    }
+
     this.updateCamera(0, true);
   }
 
@@ -460,6 +521,14 @@ export class Race {
   };
 
   handleInput(input: Input, dt: number): void {
+    // le vol libre n'existe qu'en séance libre : la carrière ne le propose pas
+    if (this.libre && input.basculerVol) {
+      this.onEvent(this.basculerVolLibre() ? 'Vol libre — V pour reprendre le vélo' : 'Retour au vélo');
+    }
+    if (this.volLibre) {
+      this.piloterVol(input, dt);
+      return;
+    }
     if (input.changeCamera) {
       this.cameraModeIndex = (this.cameraModeIndex + 1) % Race.CAMERA_MODES.length;
       this.onEvent(Race.CAMERA_LABELS[this.cameraMode]);
@@ -486,6 +555,342 @@ export class Race {
     }
   }
 
+  /* ------------------------------------------------------------ */
+  /* vol libre : visiter le parcours au lieu de le disputer         */
+  /* ------------------------------------------------------------ */
+
+  /** bascule entre rouler et survoler ; rend le nouvel état */
+  basculerVolLibre(): boolean {
+    if (this.volLibre) this.quitterVolLibre();
+    else this.entrerVolLibre();
+    return this.volLibre;
+  }
+
+  private entrerVolLibre(): void {
+    this.volLibre = true;
+    /*
+     * On décolle d'où l'on était. Partir d'un point fixe désorienterait : le
+     * joueur appuie sur V en regardant un village, il doit se retrouver
+     * au-dessus de ce village, pas au départ de l'étape.
+     */
+    const p = this.player;
+    this.volDist = THREE.MathUtils.clamp(p?.dist ?? 0, 0, this.track.length);
+    this.volLat = p?.lane ?? 0;
+    this.track.pose(this.volDist, this.volLat, this.tmp, this.tan);
+    this.volPos.set(
+      this.tmp.x,
+      this.tmp.y + this.track.groundAt(this.volDist, this.volLat) + 9,
+      this.tmp.z
+    );
+    this.volPos.addScaledVector(this.tan, -14);
+    this.volLacet = Math.atan2(this.tan.x, this.tan.z);
+    this.volTangage = -0.25;
+    this.appliquerCameraVol();
+  }
+
+  private quitterVolLibre(): void {
+    this.volLibre = false;
+    // la caméra de course reprend la main immédiatement, sans glissade depuis
+    // le point de survol : un fondu de trois secondes à travers le décor
+    this.updateCamera(0, true);
+  }
+
+  /** distance et écart latéral du point de parcours survolé */
+  get pointSurvole(): { dist: number; lat: number } {
+    return { dist: this.volDist, lat: this.volLat };
+  }
+
+  /** téléporte la caméra libre au-dessus d'un point du parcours */
+  allerA(dist: number, hauteur = 14): void {
+    if (!this.volLibre) this.entrerVolLibre();
+    this.volDist = THREE.MathUtils.clamp(dist, 0, this.track.length);
+    this.volLat = 0;
+    this.track.pose(this.volDist, 0, this.tmp, this.tan);
+    this.volPos.set(
+      this.tmp.x,
+      this.tmp.y + this.track.groundAt(this.volDist, 0) + hauteur,
+      this.tmp.z
+    );
+    this.volPos.addScaledVector(this.tan, -hauteur * 1.6);
+    this.volLacet = Math.atan2(this.tan.x, this.tan.z);
+    this.volTangage = -0.32;
+    this.appliquerCameraVol();
+  }
+
+  /**
+   * Pilotage de la caméra libre. Appelé depuis handleInput, qui est le seul
+   * endroit du moteur à voir les entrées.
+   */
+  private piloterVol(input: Input, dt: number): void {
+    const crans = input.prendreMolette();
+    if (crans) this.volVitesse = THREE.MathUtils.clamp(this.volVitesse * (1 - crans * 0.18), 4, 320);
+
+    const souris = input.prendreSouris();
+    const pad = input.volRegardPad;
+    this.volLacet -= souris.dx * 0.0032 + pad.x * dt * 2.1;
+    this.volTangage -= souris.dy * 0.0032 + pad.y * dt * 1.5;
+    // au-delà de la verticale la caméra se retourne : on s'arrête juste avant
+    this.volTangage = THREE.MathUtils.clamp(this.volTangage, -1.45, 1.45);
+
+    const av = input.volAvance;
+    const cote = input.volCote;
+    const vert = input.volVertical;
+    if (av || cote || vert) {
+      const v = this.volVitesse * (input.volTurbo ? 4 : 1) * dt;
+      const cosT = Math.cos(this.volTangage);
+      const avant = new THREE.Vector3(
+        Math.sin(this.volLacet) * cosT,
+        Math.sin(this.volTangage),
+        Math.cos(this.volLacet) * cosT
+      );
+      const droite = new THREE.Vector3(Math.cos(this.volLacet), 0, -Math.sin(this.volLacet));
+      this.volPos.addScaledVector(avant, av * v);
+      this.volPos.addScaledVector(droite, cote * v);
+      this.volPos.y += vert * v;
+      this.majPointSurvole();
+    }
+
+    /*
+     * Plancher. On ne traverse pas le sol : sans cela, une seconde
+     * d'inattention et l'on se retrouve sous le terrain, dans le noir, sans
+     * savoir par où remonter.
+     */
+    this.track.pose(this.volDist, this.volLat, this.tmp);
+    const sol = this.tmp.y + this.track.groundAt(this.volDist, this.volLat) + 1.4;
+    if (this.volPos.y < sol) this.volPos.y = sol;
+
+    /* ---- atelier ---- */
+    if (this.libre?.atelier) {
+      if (input.takePressed('r')) this.atelierRotation += Math.PI / 8;
+      if (input.takePressed('+') || input.takePressed('=')) {
+        this.atelierEchelle = Math.min(4, this.atelierEchelle * 1.15);
+      }
+      if (input.takePressed('-')) this.atelierEchelle = Math.max(0.25, this.atelierEchelle / 1.15);
+      this.majApercu();
+      if (input.prendreClic()) {
+        if (!this.poserIci()) this.onEvent('Vise le sol pour poser');
+      }
+      if (input.retirerObjet) {
+        if (!this.retirerIci()) this.onEvent('Rien à retirer ici');
+      }
+    } else if (this.apercu) {
+      this.apercu.visible = false;
+    }
+  }
+
+  /**
+   * Point du parcours le plus proche de la caméra.
+   *
+   * La recherche part de la position précédente et n'explore qu'une fenêtre
+   * autour d'elle : la caméra ne peut pas se téléporter d'une image à
+   * l'autre, et balayer les quinze kilomètres du parcours soixante fois par
+   * seconde coûterait plus cher que tout le reste de la boucle.
+   */
+  private majPointSurvole(): void {
+    const L = this.track.length;
+    let meilleurD = this.volDist;
+    let meilleur = Infinity;
+    const scan = (centre: number, rayon: number, pas: number) => {
+      for (let d = centre - rayon; d <= centre + rayon; d += pas) {
+        const dd = THREE.MathUtils.clamp(d, 0, L);
+        this.track.pose(dd, 0, this.tmp);
+        const e = (this.tmp.x - this.volPos.x) ** 2 + (this.tmp.z - this.volPos.z) ** 2;
+        if (e < meilleur) {
+          meilleur = e;
+          meilleurD = dd;
+        }
+      }
+    };
+    scan(this.volDist, 260, 8);
+    scan(meilleurD, 8, 1);
+    this.volDist = meilleurD;
+
+    // écart latéral signé, dans le repère de la route (droite = -X du monde)
+    this.track.pose(this.volDist, 0, this.tmp, this.tan);
+    const dx = this.volPos.x - this.tmp.x;
+    const dz = this.volPos.z - this.tmp.z;
+    const nx = -this.tan.z;
+    const nz = this.tan.x;
+    const nl = Math.hypot(nx, nz) || 1;
+    this.volLat = (dx * nx + dz * nz) / nl;
+  }
+
+  /** place la caméra du rendu à partir de l'état du vol */
+  private appliquerCameraVol(): void {
+    const cosT = Math.cos(this.volTangage);
+    this.tan.set(
+      Math.sin(this.volLacet) * cosT,
+      Math.sin(this.volTangage),
+      Math.cos(this.volLacet) * cosT
+    );
+    this.camera.position.copy(this.volPos);
+    this.camLook.copy(this.volPos).add(this.tan);
+    this.camera.lookAt(this.camLook);
+    this.camPos.copy(this.volPos);
+
+    // le fond lointain et l'ombre suivent la caméra, pas le coureur resté loin
+    this.track.updateDistant(this.volPos, this.tan);
+    this.sun.target.position.copy(this.volPos);
+    this.sun.target.updateMatrixWorld();
+    this.sun.position.set(
+      this.volPos.x + this.sunOffset.x,
+      this.volPos.y + this.sunOffset.y,
+      this.volPos.z + this.sunOffset.z
+    );
+  }
+
+  /* ------------------------------------------------------------ */
+  /* atelier : meubler le parcours à la main                        */
+  /* ------------------------------------------------------------ */
+
+  /** modèle sélectionné dans la palette */
+  atelierType = 'chene';
+  atelierEchelle = 1;
+  atelierRotation = 0;
+  /** prévenu à chaque pose ou retrait, pour rafraîchir le compteur de l'atelier */
+  onAtelier: (() => void) | null = null;
+  private apercu: THREE.Mesh | null = null;
+  private apercuType = '';
+  private cibleAtelier: { dist: number; lat: number } | null = null;
+
+  /** hauteur monde du sol en un point du parcours */
+  private hauteurSol(dist: number, lat: number): number {
+    this.track.pose(dist, lat, this.tmp);
+    return this.tmp.y + this.track.groundAt(dist, lat);
+  }
+
+  /**
+   * Point du parcours visé par le centre de l'écran.
+   *
+   * On ne lance pas un rayon contre le terrain — il n'existe comme maillage
+   * qu'à la résolution du niveau de détail. Le sol est une fonction de
+   * (distance, écart) : on intersecte donc le regard avec le plan horizontal
+   * du sol, on projette, et on recommence deux fois avec la nouvelle
+   * altitude. Sur un relief lisse, cela converge en trois passes.
+   */
+  private viser(): { dist: number; lat: number } | null {
+    const dir = new THREE.Vector3(
+      Math.sin(this.volLacet) * Math.cos(this.volTangage),
+      Math.sin(this.volTangage),
+      Math.cos(this.volLacet) * Math.cos(this.volTangage)
+    );
+    if (dir.y > -0.04) return null; // regard vers l'horizon : rien à viser
+    let yPlan = this.hauteurSol(this.volDist, this.volLat);
+    let res: { dist: number; lat: number } | null = null;
+    const p = new THREE.Vector3();
+    for (let i = 0; i < 3; i++) {
+      const t = (yPlan - this.volPos.y) / dir.y;
+      if (!(t > 1) || t > 700) return null;
+      p.copy(this.volPos).addScaledVector(dir, t);
+      res = this.projeterSurParcours(p);
+      yPlan = this.hauteurSol(res.dist, res.lat);
+    }
+    return res;
+  }
+
+  /** distance et écart latéral d'un point du monde, cherchés autour du survol */
+  private projeterSurParcours(p: THREE.Vector3): { dist: number; lat: number } {
+    const L = this.track.length;
+    let best = this.volDist;
+    let err = Infinity;
+    const scan = (centre: number, rayon: number, pas: number) => {
+      for (let d = centre - rayon; d <= centre + rayon; d += pas) {
+        const dd = THREE.MathUtils.clamp(d, 0, L);
+        this.track.pose(dd, 0, this.tmp);
+        const e = (this.tmp.x - p.x) ** 2 + (this.tmp.z - p.z) ** 2;
+        if (e < err) {
+          err = e;
+          best = dd;
+        }
+      }
+    };
+    scan(this.volDist, 320, 8);
+    scan(best, 8, 1);
+    this.track.pose(best, 0, this.tmp, this.tan);
+    const nx = -this.tan.z;
+    const nz = this.tan.x;
+    const nl = Math.hypot(nx, nz) || 1;
+    return { dist: best, lat: ((p.x - this.tmp.x) * nx + (p.z - this.tmp.z) * nz) / nl };
+  }
+
+  /** fantôme translucide montrant où l'objet se posera */
+  private majApercu(): void {
+    this.cibleAtelier = this.viser();
+    const geo = geometrieObjet(this.atelierType);
+    if (!this.cibleAtelier || !geo) {
+      if (this.apercu) this.apercu.visible = false;
+      return;
+    }
+    if (!this.apercu || this.apercuType !== this.atelierType) {
+      if (this.apercu) {
+        this.scene.remove(this.apercu);
+        this.apercu.geometry = geo;
+      } else {
+        const mat = new THREE.MeshBasicMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.55,
+          depthWrite: false
+        });
+        this.apercu = new THREE.Mesh(geo, mat);
+        this.apercu.renderOrder = 3;
+      }
+      this.apercu.geometry = geo;
+      this.apercuType = this.atelierType;
+      this.scene.add(this.apercu);
+    }
+    const { dist, lat } = this.cibleAtelier;
+    this.track.pose(dist, lat, this.tmp, this.tan);
+    this.apercu.visible = true;
+    this.apercu.position.set(this.tmp.x, this.tmp.y + this.track.groundAt(dist, lat), this.tmp.z);
+    this.apercu.rotation.set(0, Math.atan2(this.tan.x, this.tan.z) + this.atelierRotation, 0);
+    this.apercu.scale.setScalar(this.atelierEchelle);
+  }
+
+  /** pose le modèle courant au point visé */
+  poserIci(): boolean {
+    const c = this.cibleAtelier ?? this.viser();
+    if (!c) return false;
+    const ok = this.track.objets.ajouter({
+      type: this.atelierType,
+      dist: c.dist,
+      lat: c.lat,
+      rot: this.atelierRotation,
+      echelle: this.atelierEchelle
+    });
+    if (ok) this.onAtelier?.();
+    return ok;
+  }
+
+  /** retire l'objet le plus proche du point visé */
+  retirerIci(): boolean {
+    const c = this.cibleAtelier ?? this.viser();
+    if (!c) return false;
+    const o = this.track.objets.retirerPres(c.dist, c.lat, 14);
+    if (o) this.onAtelier?.();
+    return o !== null;
+  }
+
+  annulerDernierObjet(): boolean {
+    const o = this.track.objets.annuler();
+    if (o) this.onAtelier?.();
+    return o !== null;
+  }
+
+  viderObjets(): void {
+    this.track.objets.vider();
+    this.onAtelier?.();
+  }
+
+  /** liste des meubles posés, à enregistrer dans la création */
+  objetsPoses(): ObjetPose[] {
+    return this.track.objets.liste();
+  }
+
+  get nombreObjets(): number {
+    return this.track.objets.nombre;
+  }
+
   /** vrai tant que la séquence d'arrivée se joue */
   get enCelebration(): boolean {
     return this.phaseArrivee === 'franchie' && this.tempsArrivee < 5.2;
@@ -500,6 +905,17 @@ export class Race {
     // le ciel dérive aussi pendant le décompte
     this.sky.update(dt);
     this.track.animer(dt, this.teteDeCourse());
+    /*
+     * En vol libre, le monde continue de vivre — le ciel tourne, la foule
+     * s'agite, la pluie tombe — mais la course s'arrête net. On peut ainsi
+     * survoler une étape pendant un quart d'heure sans qu'elle se termine
+     * toute seule pendant qu'on regarde ailleurs.
+     */
+    if (this.volLibre) {
+      this.appliquerCameraVol();
+      this.rain?.update(dt, this.volPos);
+      return;
+    }
     if (this.countdown > 0) {
       const avant = Math.ceil(this.countdown);
       this.countdown -= dt;
@@ -1165,6 +1581,10 @@ export class Race {
   }
 
   private updateCamera(dt: number, snap: boolean): void {
+    if (this.volLibre) {
+      this.appliquerCameraVol();
+      return;
+    }
     const p = this.player;
 
     /*
@@ -1328,6 +1748,11 @@ export class Race {
   }
 
   dispose(): void {
+    if (this.apercu) {
+      this.scene.remove(this.apercu);
+      (this.apercu.material as THREE.Material).dispose();
+      this.apercu = null;
+    }
     this.caravane?.dispose();
     this.audio.arreterAmbiance();
     this.sky.detach();

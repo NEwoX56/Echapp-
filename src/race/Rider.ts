@@ -52,6 +52,15 @@ export class Rider {
   /** une crevaison a déjà eu lieu cette étape (au plus une) */
   crevaisonSubie = false;
   /**
+   * Séance libre de l'onglet Test : la réserve ne descend jamais.
+   *
+   * On y vient pour regarder un parcours, pas pour gérer un effort. Rien
+   * n'est retiré du modèle — l'énergie est simplement remise au maximum à
+   * chaque image, si bien que la fringale ne peut pas s'armer et que la
+   * jauge du HUD reste pleine sans qu'il faille l'exclure du calcul.
+   */
+  sansFatigue = false;
+  /**
    * Réserve maximale. Le joueur reste à 100 ; les adversaires peuvent monter
    * au-delà dans les paliers de difficulté élevés, ce qui leur permet de
    * tenir un effort bien plus longtemps avant de devoir se relever.
@@ -125,6 +134,10 @@ export class Rider {
     // fringale : déclenchée à 0, on n'en sort qu'au-dessus de 18 % d'énergie.
     // C'est la vraie sanction du coureur qui n'a pas géré son effort.
     const sangFroid = this.specialites.has('sang-froid');
+    if (this.sansFatigue) {
+      this.energy = this.energieMax;
+      this.bonking = false;
+    }
     if (this.energy <= 0) this.bonking = true;
     else if (this.bonking && this.energy > (sangFroid ? 7 : 12)) this.bonking = false;
     const fringale = this.bonking;
@@ -218,11 +231,9 @@ export class Rider {
       recovery += sip / dt;
     }
 
-    this.energy = THREE.MathUtils.clamp(
-      this.energy - drain * dt + recovery * dt,
-      0,
-      this.energieMax
-    );
+    this.energy = this.sansFatigue
+      ? this.energieMax
+      : THREE.MathUtils.clamp(this.energy - drain * dt + recovery * dt, 0, this.energieMax);
 
     // danseuse : sprint, ou gros effort dans une pente sévère
     const wantStanding =

@@ -42,6 +42,15 @@ export class Input {
   /** appuis manette consommables, à la manière de pressedOnce */
   private padPressedOnce = new Set<number>();
 
+  /* ---- souris, pour le vol libre de l'onglet Test ---- */
+  private sourisDx = 0;
+  private sourisDy = 0;
+  private sourisEnfoncee = false;
+  /** distance parcourue depuis l'appui : sert à distinguer un clic d'un glissé */
+  private sourisTraine = 0;
+  private clicEnAttente = false;
+  private molette = 0;
+
   /** appelé quand une manette est branchée ou débranchée */
   onGamepadChange: ((connected: boolean, name: string) => void) | null = null;
   private minuteur: number | null = null;
@@ -62,7 +71,43 @@ export class Input {
     window.addEventListener('blur', () => {
       this.keys.clear();
       this.pressedOnce.clear();
+      this.sourisEnfoncee = false;
     });
+
+    /*
+     * Souris. Le vol libre s'oriente en glissant, et pose un objet au clic.
+     * On distingue les deux à la distance parcourue : sous quelques pixels,
+     * c'était un clic ; au-delà, on regardait autour de soi. Pas de capture
+     * du pointeur — elle se comporte mal quand une interface HTML est
+     * superposée à la 3D, ce qui est exactement le cas de l'atelier.
+     */
+    const canvas = document.getElementById('game-canvas');
+    canvas?.addEventListener('mousedown', (e) => {
+      if ((e as MouseEvent).button !== 0) return;
+      this.sourisEnfoncee = true;
+      this.sourisTraine = 0;
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!this.sourisEnfoncee) return;
+      const me = e as MouseEvent;
+      this.sourisDx += me.movementX;
+      this.sourisDy += me.movementY;
+      this.sourisTraine += Math.abs(me.movementX) + Math.abs(me.movementY);
+    });
+    window.addEventListener('mouseup', (e) => {
+      if ((e as MouseEvent).button !== 0 || !this.sourisEnfoncee) return;
+      this.sourisEnfoncee = false;
+      if (this.sourisTraine < 6 && (e.target as HTMLElement)?.id === 'game-canvas') {
+        this.clicEnAttente = true;
+      }
+    });
+    canvas?.addEventListener(
+      'wheel',
+      (e) => {
+        this.molette += Math.sign((e as WheelEvent).deltaY);
+      },
+      { passive: true }
+    );
 
     // La manette est interrogée à cadence fixe, indépendamment du rendu.
     // Sans cela, sur une machine qui tombe à quelques images par seconde, un
@@ -291,5 +336,83 @@ export class Input {
     if (this.padDown(BTN.croixBas)) return 1;
     const a = this.axis(1);
     return Math.abs(a) > 0.45 ? Math.sign(a) : 0;
+  }
+
+  /* ---------------- vol libre (onglet Test) ---------------- */
+
+  /** passer de « rouler » à « survoler » : V, ou le clic droit du stick */
+  get basculerVol(): boolean {
+    return this.takePressed('v') || this.takePadPressed(11);
+  }
+
+  /** avancer/reculer dans l'axe du regard : -1..1 */
+  get volAvance(): number {
+    let v = 0;
+    if (this.down('z') || this.down('w') || this.down('arrowup')) v += 1;
+    if (this.down('s') || this.down('arrowdown')) v -= 1;
+    if (this.padDown(BTN.croixHaut)) v += 1;
+    if (this.padDown(BTN.croixBas)) v -= 1;
+    const a = this.axis(1);
+    if (a) v -= a;
+    return Math.max(-1, Math.min(1, v));
+  }
+
+  /** pas de côté : -1 (gauche) .. 1 (droite) */
+  get volCote(): number {
+    let v = 0;
+    if (this.down('d') || this.down('arrowright')) v += 1;
+    if (this.down('q') || this.down('a') || this.down('arrowleft')) v -= 1;
+    if (this.padDown(BTN.croixDroite)) v += 1;
+    if (this.padDown(BTN.croixGauche)) v -= 1;
+    const a = this.axis(0);
+    if (a) v += a;
+    return Math.max(-1, Math.min(1, v));
+  }
+
+  /** monter / descendre : espace et majuscule, gâchettes à la manette */
+  get volVertical(): number {
+    let v = 0;
+    if (this.down('space') || this.down(' ')) v += 1;
+    if (this.down('shift') || this.down('control')) v -= 1;
+    if (this.padDown(BTN.r2)) v += 1;
+    if (this.padDown(BTN.l2)) v -= 1;
+    return Math.max(-1, Math.min(1, v));
+  }
+
+  /** rotation du regard demandée à la manette : stick droit */
+  get volRegardPad(): { x: number; y: number } {
+    return { x: this.axis(2), y: this.axis(3) };
+  }
+
+  /** vol rapide : le déplacement est multiplié tant que la touche est tenue */
+  get volTurbo(): boolean {
+    return this.down('t') || this.padDown(BTN.r1);
+  }
+
+  /** retirer l'objet visé dans l'atelier : X, ou Carré / X à la manette */
+  get retirerObjet(): boolean {
+    return this.takePressed('x') || this.takePadPressed(BTN.ouest);
+  }
+
+  /** consomme le glissé de souris accumulé depuis la dernière image */
+  prendreSouris(): { dx: number; dy: number } {
+    const r = { dx: this.sourisDx, dy: this.sourisDy };
+    this.sourisDx = 0;
+    this.sourisDy = 0;
+    return r;
+  }
+
+  /** consomme un clic court sur la vue 3D (pose d'objet dans l'atelier) */
+  prendreClic(): boolean {
+    if (!this.clicEnAttente) return false;
+    this.clicEnAttente = false;
+    return true;
+  }
+
+  /** consomme les crans de molette accumulés (réglage de la vitesse de vol) */
+  prendreMolette(): number {
+    const m = this.molette;
+    this.molette = 0;
+    return m;
   }
 }

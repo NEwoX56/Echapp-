@@ -18,7 +18,7 @@ import {
   type Capabilities,
   type QualitySettings
 } from './Quality';
-import { Race } from '../race/Race';
+import { Race, type OptionsLibre } from '../race/Race';
 import { Menu } from '../ui/Menu';
 import { GamepadNav } from '../ui/GamepadNav';
 import { NameTags } from '../ui/NameTags';
@@ -31,6 +31,8 @@ import { getRoster } from '../data/rosterStore';
 import { toast, formatGap } from '../ui/util';
 import { PostFX } from './PostFX';
 import type { StageDef } from '../data/types';
+import { Atelier } from '../ui/Atelier';
+import { creations, nouvelId } from '../data/creations';
 
 type GameState = 'menu' | 'briefing' | 'race' | 'results' | 'replay';
 
@@ -44,6 +46,15 @@ export class Game {
   private race: Race | null = null;
   /** séance libre de l'onglet Test : aucun résultat n'est appliqué à la carrière */
   private modeLibre = false;
+  /** réglages de la séance libre en cours */
+  private optionsLibre: OptionsLibre | null = null;
+  /** étapes restant à enchaîner dans un tour créé */
+  private serieLibre: StageDef[] = [];
+  /** des objets ont été posés depuis le dernier enregistrement */
+  private atelierModifie = false;
+  /** création en cours d'édition : c'est elle que « Enregistrer » met à jour */
+  private creationEnCours: StageDef | null = null;
+  private atelier!: Atelier;
 
   private menuEl = document.getElementById('screen-menu')!;
   private hudEl = document.getElementById('screen-hud')!;
@@ -162,7 +173,8 @@ export class Game {
       this.menuEl,
       this.career,
       (stage) => this.ouvrirBriefing(stage),
-      (stage, seul) => this.startRace(stage, { libre: true, seul })
+      (stage, options) => this.startRace(stage, options),
+      (stages, options) => this.demarrerSerie(stages, options)
     );
     // après chaque reconstruction du menu, le curseur doit retrouver sa place
     this.menu.onRendered = () => this.navMenu.rafraichir();
@@ -185,6 +197,9 @@ export class Game {
     this.nameTags = new NameTags(document.getElementById('ui') ?? document.body);
     this.nameTags.setActif(this.career.save.nomsCoureurs !== false);
     this.results = new Results(this.resultsEl);
+    // l'atelier vit à côté des écrans : il se superpose à la 3D pendant une
+    // séance libre, et n'existe pas du tout le reste du temps
+    this.atelier = new Atelier(document.getElementById('ui') ?? document.body);
   }
 
   /** navigation à la manette dans le menu et l'écran de résultats */
@@ -313,8 +328,11 @@ export class Game {
     this.navBriefing.rafraichir();
   }
 
-  private startRace(stage: StageDef, libre?: { libre: boolean; seul: boolean }): void {
-    this.modeLibre = libre?.libre === true;
+  private startRace(stage: StageDef, libre?: OptionsLibre): void {
+    this.modeLibre = libre != null;
+    this.optionsLibre = libre ?? null;
+    this.creationEnCours = stage.creee ? stage : null;
+    if (!libre) this.serieLibre = [];
     // Le lancement part d'un clic ou d'un appui : c'est le geste utilisateur
     // exigé par l'API. Passer en plein écran ici rend la manette au jeu sur
     // les navigateurs de console, où l'interface du navigateur intercepte
@@ -358,10 +376,29 @@ export class Game {
       s.difficulty,
       this.quality,
       { engine: this.audio, music: this.music },
-      (msg: string) => toast(msg)
+      (msg: string) => toast(msg),
+      libre ?? null
     );
-    this.hud.mount(stage, this.career.save.tour.tourId);
+    this.hud.mount(stage, this.career.save.tour.tourId, libre?.sansFatigue === true);
     this.setState('race');
+    if (libre) {
+      this.atelier.ouvrir(
+        this.race,
+        {
+          rouler: () => this.race?.basculerVolLibre(),
+          enregistrer: () => this.enregistrerAtelier(),
+          quitter: () => this.quitterSeanceLibre()
+        },
+        { edition: libre.atelier, titre: stage.name }
+      );
+      this.atelierModifie = false;
+      this.race.onAtelier = () => {
+        this.atelierModifie = true;
+        this.atelier.rafraichir();
+      };
+    } else {
+      this.atelier.fermer();
+    }
     // hook de debug/test (Playwright) : accès à la course en cours
     (window as unknown as Record<string, unknown>).__race = this.race;
     (window as unknown as Record<string, unknown>).__career = this.career;
@@ -398,6 +435,14 @@ export class Game {
      * de ce qui se joue ici ne doit y laisser de trace.
      */
     if (this.modeLibre) {
+      // tour créé : on enchaîne sur l'étape suivante sans repasser par le menu
+      const suivante = this.serieLibre.shift();
+      if (suivante && this.optionsLibre) {
+        const options = this.optionsLibre;
+        toast(`Étape suivante : ${suivante.name}`);
+        this.startRace(suivante, options);
+        return;
+      }
       this.quitterSeanceLibre();
       return;
     }
@@ -444,8 +489,62 @@ export class Game {
   }
 
   /** retour au menu depuis une séance libre, à l'arrivée ou sur abandon */
+  /**
+   * Enchaînement d'étapes en séance libre.
+   *
+   * C'est ce qui donne corps aux tours créés : on lance le premier parcours,
+   * et chaque arrivée déclenche le suivant. Rien n'est classé ni enregistré,
+   * la carrière n'en sait rien — c'est une visite guidée, pas une épreuve.
+   */
+  private demarrerSerie(stages: StageDef[], options: OptionsLibre): void {
+    if (!stages.length) return;
+    this.serieLibre = stages.slice(1);
+    this.startRace(stages[0], options);
+  }
+
+  /**
+   * Enregistre les meubles posés.
+   *
+   * Meubler une étape officielle n'y touche pas : cela en crée une copie
+   * dans les créations du joueur. Les tours du jeu restent ce qu'ils sont,
+   * et l'on repart de sa propre version à la séance suivante.
+   */
+  private enregistrerAtelier(): void {
+    if (!this.race) return;
+    const base = this.creationEnCours ?? this.race.stage;
+    const objets = this.race.objetsPoses();
+    const s: StageDef = this.creationEnCours
+      ? { ...base, objets }
+      : {
+          ...base,
+          id: nouvelId('etape'),
+          name: `${base.name} (atelier)`,
+          objets,
+          creee: true
+        };
+    this.creationEnCours = creations.enregistrer(s);
+    this.atelierModifie = false;
+    this.menu.render();
+    toast(
+      `${objets.length} objet${objets.length > 1 ? 's' : ''} enregistré${objets.length > 1 ? 's' : ''} — « ${s.name} »`
+    );
+  }
+
   private quitterSeanceLibre(): void {
+    /*
+     * On ne perd pas son travail par mégarde : l'atelier prévient si des
+     * objets ont été posés sans être enregistrés. Le reste d'une séance
+     * libre, lui, n'a rien à sauver — c'est tout son intérêt.
+     */
+    if (this.atelierModifie && !confirm('Des objets posés ne sont pas enregistrés. Quitter quand même ?')) {
+      return;
+    }
+    this.atelierModifie = false;
     this.modeLibre = false;
+    this.optionsLibre = null;
+    this.serieLibre = [];
+    this.creationEnCours = null;
+    this.atelier.fermer();
     this.disposeRace();
     this.music.jouer('menu');
     this.showMenu();
@@ -565,8 +664,22 @@ export class Game {
     if (this.state === 'race' && this.race) {
       this.race.handleInput(this.input, dt);
       this.race.update(dt);
+      /*
+       * Vol libre : le tableau de bord du coureur n'a plus de sens — on ne
+       * roule pas — et laisserait ses jauges figées au milieu de l'écran.
+       * Il s'efface au profit de l'atelier.
+       */
+      const vol = this.race.volLibre;
+      this.hudEl.classList.toggle('hidden', vol);
+      // les étiquettes de nom suivent les coureurs : en vol libre elles
+      // flotteraient au-dessus d'un peloton immobile, loin derrière
+      this.nameTags.setEnCourse(!vol);
+      if (this.optionsLibre) {
+        this.atelier.setVisible(vol);
+        if (vol) this.atelier.rafraichir();
+      }
       this.hud.setGamepad(this.input.gamepadConnected);
-      this.hud.update(this.race.hudState());
+      if (!vol) this.hud.update(this.race.hudState());
       this.nameTags.update(this.race.riders, this.race.player, this.race.camera);
       this.majOmbres();
       this.mesurerFps(dt);

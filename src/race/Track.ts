@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { StageDef, ClimbDef, SprintDef } from '../data/types';
 import type { SceneryAssets, SceneryPiece } from '../core/SceneryAssets';
 import type { BuildingKit } from './BuildingKit';
+import { Poseur } from '../monde/Poseur';
 import type { QualitySettings } from '../core/Quality';
 import { Decor } from './Decor';
 
@@ -90,6 +91,8 @@ export class Track {
   private q: QualitySettings;
   /** paysages traversés */
   decor!: Decor;
+  /** meubles posés à la main dans l'atelier (onglet Test) */
+  objets!: Poseur;
   /** horloge transmise au shader d'animation de la foule */
   private horlogeFoule: { value: number } | null = null;
   /** position de la course transmise au shader : le public s'anime à son passage */
@@ -163,6 +166,15 @@ export class Track {
     this.buildCrowds(rand);
     this.buildBanners();
     this.buildFinish();
+
+    /*
+     * Les meubles de l'atelier viennent par-dessus tout le reste. Ils ne
+     * passent pas par le filtre de constructibilité du décor automatique :
+     * c'est le joueur qui décide, y compris de planter un phare au bord du
+     * vide s'il trouve que ça rend bien.
+     */
+    this.objets = new Poseur(this, stage.objets ?? [], this.q.shadows !== false);
+    this.group.add(this.objets.group);
   }
 
   /* ------------------------------------------------------------ */
@@ -1871,6 +1883,7 @@ export class Track {
 
   dispose(): void {
     this.decor?.dispose();
+    this.objets?.dispose();
     this.group.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh) mesh.geometry?.dispose();

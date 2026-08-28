@@ -1,0 +1,176 @@
+METTRE SCANFOOD EN LIGNE
+========================
+
+Ce n'est pas comme le jeu, et il vaut mieux le savoir tout de suite.
+
+Le jeu se compile en un dossier dist que tu glisses sur Netlify Drop. Ce
+dossier ne contient que des fichiers : Netlify les sert tels quels, rien
+ne s'exécute.
+
+ScanFood, non. À chaque visite, du code tourne sur un serveur : il lit ton
+cookie de session, interroge OpenFoodFacts, garde la clé Higgsfield hors
+de portée du navigateur, écrit ton historique. Un dossier de fichiers ne
+sait pas faire ça. Déposé sur Netlify Drop, tu obtiendrais une page
+blanche.
+
+Il n'y a donc pas de zip à fabriquer. C'est Netlify qui compile, à partir
+de GitHub.
+
+Bonne nouvelle : tout ce qui suit est à faire UNE SEULE FOIS. Ensuite,
+chaque « git push » remet le site à jour tout seul — plus jamais de
+dossier à refabriquer ni à reglisser.
+
+
+ÉTAPE 1 — LA BASE DE DONNÉES (à faire en premier)
+=================================================
+
+ScanFood a besoin d'une base pour garder tes scans, favoris, combats et
+tournois. Sans elle, le site fonctionne mais tout s'efface au bout de
+quelques minutes : l'hébergement Netlify n'a pas de disque durable.
+
+  1. Va sur https://neon.tech et crée un compte (gratuit, sans carte)
+  2. « Create project » — n'importe quel nom, région Europe
+  3. Neon affiche une « Connection string ». Copie-la. Elle ressemble à :
+
+       postgresql://user:motdepasse@ep-xxx.eu-central-1.aws.neon.tech/db
+
+  4. Garde-la de côté, tu en as besoin deux fois : maintenant, puis à
+     l'étape 3.
+
+Maintenant, crée les tables. Dans un terminal, à la racine du projet :
+
+  cd scanfood
+  npm install
+  DATABASE_URL="colle-ta-chaîne-ici" npm run db:push
+
+Tu dois voir « Your database is now in sync with your Prisma schema ».
+C'est fait, tu n'y reviendras plus.
+
+  (Sous Windows, PowerShell : $env:DATABASE_URL="..." ; npm run db:push)
+
+
+ÉTAPE 2 — FABRIQUER LA CLÉ DE SESSION
+=====================================
+
+C'est ce qui signe les cookies de connexion. Sans elle, le site refuse de
+démarrer en production — volontairement.
+
+Dans un terminal :
+
+  openssl rand -base64 32
+
+Copie le résultat. Si tu n'as pas openssl, n'importe quelle suite de 30
+caractères au hasard fait l'affaire, du moment qu'elle n'est écrite nulle
+part ailleurs.
+
+
+ÉTAPE 3 — CRÉER LE SITE SUR NETLIFY
+===================================
+
+  1. https://app.netlify.com → « Add new site » → « Import an existing
+     project » → « Deploy with GitHub »
+  2. Choisis le dépôt NEwoX56/Echapp-
+  3. Renseigne exactement ceci :
+
+       Branch to deploy .......... claude/scanfood-app-7pygvl
+       Base directory ............ scanfood
+       Build command ............. (laisse vide)
+       Publish directory ......... (laisse vide)
+
+     Les deux dernières sont lues dans scanfood/netlify.toml. Si tu les
+     remplis à la main, tu risques de contredire ce fichier.
+
+  4. Avant de valider, ouvre « Add environment variables » et ajoute :
+
+       SESSION_SECRET   la clé de l'étape 2
+       DATABASE_URL     la chaîne Neon de l'étape 1
+
+  5. « Deploy ». La première compilation prend deux à trois minutes.
+
+Netlify te donne une adresse du genre
+https://un-nom-au-hasard.netlify.app — tu peux la renommer dans
+Site configuration → Change site name.
+
+
+ÉTAPE 4 — VÉRIFIER
+==================
+
+Ouvre l'adresse sur ton téléphone. Tu dois voir l'écran d'accueil avec
+« Scanne. Compare. Choisis mieux. »
+
+  1. Saisis ton e-mail, tu entres
+  2. Scanner → Code → tape 3017620422003 → tu dois obtenir Nutella, 0/100
+  3. Scanner → Photo → l'appareil natif doit s'ouvrir
+  4. Recharge la page : ton scan doit toujours être dans l'historique
+
+Si le point 4 échoue, c'est que DATABASE_URL n'est pas prise en compte.
+Vérifie-la dans Site configuration → Environment variables, puis relance
+une compilation (Deploys → Trigger deploy → Clear cache and deploy site).
+
+
+METTRE À JOUR PLUS TARD
+=======================
+
+  git add .
+  git commit -m "ce que tu as changé"
+  git push
+
+C'est tout. Netlify voit le push, recompile, remplace le site. Compte deux
+à trois minutes. Tu suis l'avancement dans l'onglet Deploys.
+
+Si une compilation échoue, le site en ligne ne bouge pas : l'ancienne
+version reste en place le temps que tu corriges.
+
+
+TESTER AVANT DE PUBLIER
+=======================
+
+  cd scanfood
+  npm run dev
+
+Puis ouvre http://localhost:3000. Pour tester sur ton téléphone sans
+publier, sur le même Wi-Fi :
+
+  npm run dev -- -H 0.0.0.0
+
+et ouvre http://<l'ip-de-ton-ordi>:3000 depuis le téléphone. Le mode photo
+fonctionne en HTTP simple, sans certificat.
+
+Pour travailler sans dépendre d'OpenFoodFacts, quatorze produits sont
+livrés avec le projet :
+
+  SCANFOOD_DEMO_DATA=1 npm run dev
+
+
+LES VIDÉOS ET LES PHOTOS
+========================
+
+Neuf médias sont déjà générés et livrés avec le projet : le générique
+d'ouverture, la vidéo de victoire, celle du couronnement, et six photos
+éditoriales. Ils sont chargés depuis le serveur de Higgsfield.
+
+Pour les héberger toi-même — recommandé, ça te met à l'abri si ces
+adresses expirent :
+
+  cd scanfood
+  npm run higgsfield:prefetch
+  git add public/higgsfield
+  git commit -m "Assets Higgsfield en local"
+  git push
+
+Si tu veux qu'une vidéo différente soit générée pour CHAQUE gagnant, il
+faut une clé Higgsfield : ajoute HIGGSFIELD_API_KEY dans les variables
+d'environnement Netlify. Sans clé, tout marche, mais c'est la même vidéo
+de victoire pour tout le monde.
+
+
+DEUX PIÈGES
+===========
+
+Ne mets pas « Base directory » à la racine. Sans « scanfood », Netlify
+tombe sur le jeu et se trompe de projet.
+
+Ne déploie pas sans DATABASE_URL en te disant que tu verras plus tard. Le
+site s'affichera normalement et tu croiras que tout va bien — puis tes
+scans disparaîtront sans message d'erreur. C'est le seul défaut silencieux
+de l'installation.

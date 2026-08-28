@@ -221,6 +221,34 @@ par les utilitaires `safe-t` / `safe-b`.
 
 ---
 
+## Déploiement sur Netlify
+
+ScanFood n'est pas un site statique : il ne se dépose pas sur Netlify Drop.
+Netlify doit le compiler, le Next Runtime convertissant les pages et les
+routes API en fonctions. La configuration est dans `scanfood/netlify.toml`.
+
+1. **Add new site → Import an existing project → GitHub**, dépôt `NEwoX56/Echapp-`.
+2. **Base directory : `scanfood`.** Sans cela, Netlify compile le jeu à la racine.
+   Laisse la commande de build et le répertoire de publication vides : ils
+   viennent de `netlify.toml`.
+3. Variables d'environnement : `SESSION_SECRET` (obligatoire) et
+   `DATABASE_URL` (voir ci-dessous).
+
+Le disque de Netlify est en lecture seule et les conteneurs de fonctions
+sont recyclés sans préavis. Le magasin fichier bascule alors sur `/tmp`
+pour ne rien casser, mais **les données n'y survivent pas** : sans
+`DATABASE_URL`, le site s'affiche normalement puis perd silencieusement
+l'historique. Crée les tables une fois depuis ta machine :
+
+```bash
+DATABASE_URL="postgres://…" npm run db:push
+```
+
+Un pas-à-pas complet, écrit pour être suivi sans connaissances
+préalables, est dans **`COMMENT-METTRE-EN-LIGNE.txt`**.
+
+---
+
 ## Déploiement sur Vercel
 
 ```bash

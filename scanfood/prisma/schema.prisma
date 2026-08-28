@@ -1,0 +1,99 @@
+// ScanFood — schéma de données.
+// Toutes les tables sont scopées par `userId`.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  firstName String
+  createdAt DateTime @default(now())
+
+  scans       ScanHistory[]
+  favorites   Favorite[]
+  battles     Battle[]
+  tournaments Tournament[]
+}
+
+model ScanHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  barcode      String
+  product_name String
+  brand        String   @default("")
+  score        Int
+  image_url    String   @default("")
+  nutriscore   String?
+  nova_group   Int?
+  ecoscore     String?
+  product_data Json
+  created_at   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, created_at])
+}
+
+model Favorite {
+  id           String   @id @default(cuid())
+  userId       String
+  barcode      String
+  product_name String
+  brand        String   @default("")
+  score        Int
+  image_url    String   @default("")
+  product_data Json
+  created_at   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, barcode])
+  @@index([userId, created_at])
+}
+
+model Battle {
+  id                String   @id @default(cuid())
+  userId            String
+  product_a_barcode String
+  product_a_name    String
+  product_a_score   Int
+  product_a_image   String   @default("")
+  product_a_brand   String   @default("")
+  product_a_data    Json
+  product_b_barcode String
+  product_b_name    String
+  product_b_score   Int
+  product_b_image   String   @default("")
+  product_b_brand   String   @default("")
+  product_b_data    Json
+  winner            String // "a" | "b" | "tie"
+  victory_video_url String?
+  created_at        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, created_at])
+}
+
+model Tournament {
+  id                   String   @id @default(cuid())
+  userId               String
+  products             Json
+  winner_name          String
+  winner_score         Int
+  winner_image         String   @default("")
+  product_count        Int
+  coronation_video_url String?
+  created_at           DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, created_at])
+}

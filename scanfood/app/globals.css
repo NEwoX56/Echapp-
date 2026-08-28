@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-cream text-ink font-sans antialiased;
+    font-feature-settings: 'ss01', 'cv05';
+  }
+
+  /* Chiffres tabulaires partout : les scores restent alignés colonne à colonne. */
+  .tnum {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  ::selection {
+    @apply bg-forest text-cream;
+  }
+
+  input,
+  button,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+}
+
+@layer components {
+  /* Surtitre éditorial : petites capitales très espacées. */
+  .eyebrow {
+    @apply text-eyebrow font-medium uppercase tracking-[0.16em] text-ink-mute;
+  }
+
+  /* Titre de section serif, aligné à gauche. */
+  .section-title {
+    @apply font-serif text-title font-normal text-ink;
+  }
+
+  /* Séparateur : fine ligne plutôt qu'une carte ombrée. */
+  .rule-t {
+    @apply border-t border-rule;
+  }
+
+  .rule-b {
+    @apply border-b border-rule;
+  }
+
+  /* Bouton principal — bloc plein, sobre. */
+  .btn-primary {
+    @apply inline-flex w-full items-center justify-center gap-2.5 bg-forest px-6 py-4
+           text-[0.9375rem] font-medium tracking-[0.01em] text-cream
+           transition-[background-color,transform] duration-300 ease-editorial
+           active:scale-[0.985] disabled:cursor-not-allowed disabled:bg-ink-faint;
+  }
+
+  .btn-primary:not(:disabled):hover {
+    @apply bg-forest-soft;
+  }
+
+  /* Bouton secondaire — contour fin. */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 border border-rule bg-transparent
+           px-5 py-3.5 text-[0.875rem] font-medium text-ink
+           transition-colors duration-300 ease-editorial
+           hover:border-ink hover:bg-cream-deep
+           disabled:cursor-not-allowed disabled:text-ink-faint disabled:hover:border-rule disabled:hover:bg-transparent;
+  }
+
+  /* Champ de saisie : soulignement seul, pas de boîte. */
+  .field {
+    @apply w-full border-0 border-b border-rule bg-transparent px-0 py-3
+           text-[1rem] text-ink placeholder:text-ink-faint
+           outline-none transition-colors duration-300 focus:border-ink;
+  }
+
+  /* Fiche produit éditoriale : contour fin, fond blanc, pas d'ombre. */
+  .product-card {
+    @apply flex items-center gap-4 border border-rule bg-white px-4 py-3.5
+           transition-colors duration-300 ease-editorial hover:border-ink-faint;
+  }
+
+  .thumb {
+    @apply h-14 w-14 shrink-0 border border-rule bg-cream-deep object-cover;
+  }
+}
+
+@layer utilities {
+  .safe-b {
+    padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+  }
+
+  .safe-t {
+    padding-top: max(env(safe-area-inset-top), 0px);
+  }
+
+  /* Masque de révélation typographique (chorégraphies de victoire). */
+  .mask-reveal {
+    -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Respecte la préférence système de mouvement réduit. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

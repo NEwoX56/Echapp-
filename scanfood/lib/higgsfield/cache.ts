@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { DATA_DIR } from '../dataDir';
+
 /**
  * Cache des générations Higgsfield.
  *
@@ -43,7 +45,6 @@ async function redis(): Promise<RedisLike> {
 
 /* ---------------------------- Fichier local ------------------------- */
 
-const DATA_DIR = process.env.SCANFOOD_DATA_DIR || path.join(process.cwd(), '.data');
 const CACHE_FILE = path.join(DATA_DIR, 'higgsfield-cache.json');
 
 interface FileCache {
@@ -66,8 +67,14 @@ async function readFileCache(): Promise<FileCache> {
 }
 
 async function persistFileCache(): Promise<void> {
-  await mkdir(DATA_DIR, { recursive: true });
-  await writeFile(CACHE_FILE, JSON.stringify(fileCache ?? { entries: {}, counters: {} }), 'utf8');
+  // Le cache est best-effort : un disque en lecture seule ne doit jamais
+  // faire échouer une génération, seulement la rendre non mémorisée.
+  try {
+    await mkdir(DATA_DIR, { recursive: true });
+    await writeFile(CACHE_FILE, JSON.stringify(fileCache ?? { entries: {}, counters: {} }), 'utf8');
+  } catch {
+    /* on continue sans cache persistant */
+  }
 }
 
 /* ------------------------------- API -------------------------------- */

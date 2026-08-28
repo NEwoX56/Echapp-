@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { DATA_DIR, warnEphemeralStorage } from './dataDir';
+
 import type {
   BattleRecord,
   FavoriteRecord,
@@ -37,7 +39,6 @@ interface FileShape {
   tournaments: TournamentRecord[];
 }
 
-const DATA_DIR = process.env.SCANFOOD_DATA_DIR || path.join(process.cwd(), '.data');
 const DATA_FILE = path.join(DATA_DIR, 'store.json');
 
 const EMPTY: FileShape = { users: [], scans: [], favorites: [], battles: [], tournaments: [] };
@@ -47,6 +48,7 @@ let writeChain: Promise<void> = Promise.resolve();
 
 async function readStore(): Promise<FileShape> {
   if (cache) return cache;
+  warnEphemeralStorage();
   try {
     const raw = await readFile(DATA_FILE, 'utf8');
     cache = { ...EMPTY, ...(JSON.parse(raw) as Partial<FileShape>) };

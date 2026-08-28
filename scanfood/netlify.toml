@@ -1,0 +1,28 @@
+# Configuration Netlify pour ScanFood.
+#
+# ScanFood n'est pas un site statique : l'authentification, les appels à
+# OpenFoodFacts, les routes Higgsfield et la persistance s'exécutent côté
+# serveur. Il ne se dépose donc pas sur https://app.netlify.com/drop comme
+# le dossier `dist` du jeu — il doit être COMPILÉ par Netlify, qui
+# transforme les pages et les routes API en fonctions.
+#
+# Dans l'interface Netlify, crée le site depuis le dépôt GitHub et règle
+# « Base directory » sur `scanfood`. Le reste est pris en charge ici.
+#
+# Variables d'environnement à renseigner (Site settings → Environment) :
+#   SESSION_SECRET   obligatoire — openssl rand -base64 32
+#   DATABASE_URL     fortement recommandé — sans base, l'historique est
+#                    perdu à chaque déploiement (disque éphémère)
+#   UPSTASH_REDIS_REST_URL / _TOKEN   cache des générations Higgsfield
+#   HIGGSFIELD_API_KEY                optionnel — sans clé, les assets
+#                                     pré-générés sont servis
+
+[build]
+  base = "scanfood"
+  command = "npm run build"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  NODE_VERSION = "20"
